@@ -52,9 +52,11 @@ const CatalogueBuilderScreen = () => {
   const [color, setColor] = useState('');
   const [strap, setStrap] = useState('');
   const [type, setType] = useState('');
+  const [gender, setGender] = useState('');
 
   const [showGallery, setShowGallery] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [showLivePreview, setShowLivePreview] = useState(true);
 
   // Setup form fields on mount or when watch ID changes
   useEffect(() => {
@@ -67,12 +69,13 @@ const CatalogueBuilderScreen = () => {
       setColor(watch.color || 'Silver Dial');
       setStrap(watch.strap || 'Metal');
       setType(watch.type || 'Analogue');
+      setGender(watch.gender || 'Men');
     }
   }, [watchId, watch]);
 
   // Animation values for cascading entrance
   const animValues = useRef(
-    [...Array(7)].map(() => new Animated.Value(0)),
+    [...Array(8)].map(() => new Animated.Value(0)),
   ).current;
 
   useEffect(() => {
@@ -133,6 +136,7 @@ const CatalogueBuilderScreen = () => {
       color,
       strap,
       type,
+      gender,
     });
   };
 
@@ -260,6 +264,9 @@ const CatalogueBuilderScreen = () => {
               <TextInput style={styles.input} value={type} onChangeText={setType} placeholder="Type" />
             </View>
           </View>
+
+          <Text style={styles.label}>GENDER</Text>
+          <TextInput style={styles.input} value={gender} onChangeText={setGender} placeholder="Gender (Men/Women)" />
         </Animated.View>
 
         <Animated.View style={getAnimStyle(4)}>
@@ -274,8 +281,85 @@ const CatalogueBuilderScreen = () => {
           />
         </Animated.View>
 
+        {/* LIVE PREVIEW SECTION */}
+        <Animated.View style={[styles.livePreviewCard, getAnimStyle(5)]}>
+          <TouchableOpacity 
+            style={styles.previewHeader}
+            onPress={() => setShowLivePreview(!showLivePreview)}
+          >
+            <View style={styles.previewHeaderLeft}>
+              <Icon name="eye" size={18} color="#000" style={{ marginRight: 8 }} />
+              <Text style={styles.previewHeaderText}>Live PDF Preview</Text>
+            </View>
+            <Icon 
+              name={showLivePreview ? "chevron-up" : "chevron-down"} 
+              size={20} 
+              color="#666" 
+            />
+          </TouchableOpacity>
+
+          {showLivePreview && (
+            <View style={styles.previewContent}>
+              {/* Mini Cover Page Preview */}
+              <View style={styles.miniPage}>
+                <View style={styles.miniPageHeader}>
+                  <Text style={styles.miniBrand}>{brand.toUpperCase()}</Text>
+                  <Text style={styles.miniName}>{name.toUpperCase()}</Text>
+                </View>
+                <View style={styles.miniImageContainer}>
+                  {imageUrl ? (
+                    <Image source={{ uri: imageUrl }} style={styles.miniImage} resizeMode="contain" />
+                  ) : (
+                    <Icon name="image" size={24} color="#CCC" />
+                  )}
+                </View>
+                <View style={styles.miniFooter}>
+                  <Text style={styles.miniRef}>Ref: BW-{watch?.id || '000'}</Text>
+                  <Text style={styles.miniPageNum}>01</Text>
+                </View>
+              </View>
+
+              {/* Mini Content Page Preview */}
+              <View style={styles.miniPage}>
+                <View style={styles.miniSpecs}>
+                  <View style={styles.miniSpecRow}>
+                    <Text style={styles.miniSpecLabel}>GENDER</Text>
+                    <Text style={styles.miniSpecValue}>{gender || 'Men'}</Text>
+                  </View>
+                  <View style={styles.miniSpecRow}>
+                    <Text style={styles.miniSpecLabel}>STRAP</Text>
+                    <Text style={styles.miniSpecValue}>{strap || 'Metal'}</Text>
+                  </View>
+                  <View style={styles.miniSpecRow}>
+                    <Text style={styles.miniSpecLabel}>TYPE</Text>
+                    <Text style={styles.miniSpecValue}>{type || 'Analogue'}</Text>
+                  </View>
+                  <View style={styles.miniSpecRow}>
+                    <Text style={styles.miniSpecLabel}>COLOR</Text>
+                    <Text style={styles.miniSpecValue}>{color || 'Silver'}</Text>
+                  </View>
+                </View>
+                {showPrice && (
+                  <Text style={styles.miniPrice}>
+                    {price ? `$${parseFloat(price).toLocaleString()}` : 'N/A'}
+                  </Text>
+                )}
+                {showDesc && description && (
+                  <Text style={styles.miniDesc} numberOfLines={2}>
+                    {description}
+                  </Text>
+                )}
+                <View style={styles.miniFooter}>
+                  <Text style={styles.miniRef}>© 2026 B-Watch</Text>
+                  <Text style={styles.miniPageNum}>02</Text>
+                </View>
+              </View>
+            </View>
+          )}
+        </Animated.View>
+
         {/* PDF EXPORT CONFIGURATION */}
-        <Animated.View style={[styles.settingsCard, getAnimStyle(5)]}>
+        <Animated.View style={[styles.settingsCard, getAnimStyle(6)]}>
           <Text style={styles.settingsHeader}>PDF EXPORT CONFIGURATION</Text>
 
           <View style={styles.switchRow}>
@@ -310,7 +394,7 @@ const CatalogueBuilderScreen = () => {
         </Animated.View>
 
         {/* BUTTON ACTIONS */}
-        <Animated.View style={[styles.actionsWrapper, getAnimStyle(6)]}>
+        <Animated.View style={[styles.actionsWrapper, getAnimStyle(7)]}>
           <TouchableOpacity style={styles.btnPrimary} onPress={handlePrint} activeOpacity={0.8}>
             <Icon name="printer" color="#FFF" size={18} style={{ marginRight: 8 }} />
             <Text style={styles.btnTextPrimary}>Print (PDF Preview)</Text>
@@ -523,6 +607,119 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 14,
     fontWeight: '700',
+  },
+  // Live Preview Styles
+  livePreviewCard: {
+    backgroundColor: '#FFF',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#EEE',
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  previewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderColor: '#F0F0F2',
+  },
+  previewHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  previewHeaderText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#000',
+  },
+  previewContent: {
+    marginTop: 12,
+    gap: 12,
+  },
+  miniPage: {
+    backgroundColor: '#FAFAFA',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#EAEAEA',
+  },
+  miniPageHeader: {
+    marginBottom: 8,
+  },
+  miniBrand: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#000',
+  },
+  miniName: {
+    fontSize: 10,
+    fontWeight: '400',
+    color: '#666',
+    marginTop: 2,
+  },
+  miniImageContainer: {
+    height: 80,
+    backgroundColor: '#F0F0F2',
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  miniImage: {
+    width: '70%',
+    height: '70%',
+  },
+  miniSpecs: {
+    marginBottom: 8,
+  },
+  miniSpecRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+    borderBottomWidth: 1,
+    borderColor: '#F5F5F5',
+  },
+  miniSpecLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#888',
+  },
+  miniSpecValue: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: '#000',
+  },
+  miniPrice: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 4,
+  },
+  miniDesc: {
+    fontSize: 10,
+    color: '#666',
+    lineHeight: 14,
+    marginBottom: 8,
+  },
+  miniFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderColor: '#EAEAEA',
+  },
+  miniRef: {
+    fontSize: 8,
+    color: '#999',
+  },
+  miniPageNum: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#000',
   },
 });
 

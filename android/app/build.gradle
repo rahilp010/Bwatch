@@ -57,7 +57,7 @@ react {
 /**
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
  */
-def enableProguardInReleaseBuilds = false
+def enableProguardInReleaseBuilds = true
 
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
@@ -71,6 +71,11 @@ def enableProguardInReleaseBuilds = false
  * this variant is about 6MiB larger per architecture than default.
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
+def vectorIconFonts = [
+    "Feather.ttf",
+    "FontAwesome.ttf",
+    "MaterialCommunityIcons.ttf",
+]
 
 android {
     ndkVersion rootProject.ext.ndkVersion
@@ -78,14 +83,49 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
 
     namespace "com.bwatch"
+    buildDir = new File(rootProject.projectDir, "../build/app")
+
+    splits {
+        abi {
+            enable true
+            reset()
+            include "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+            universalApk false
+        }
+    }
     defaultConfig {
         applicationId "com.bwatch"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        resConfigs "en"
+        externalNativeBuild {
+            cmake {
+                cFlags "-Wno-error=non-virtual-dtor"
+                arguments "-DANDROID_STL=c++_shared"
+            }
+        }
+    }
+    // Configure shorter .cxx directory to avoid Windows MAX_PATH limit
+    def cxxDir = file("D:/bwatch-cxx")
+    if (!cxxDir.exists()) {
+        cxxDir.mkdirs()
+    }
+    externalNativeBuild {
+        cmake {
+            buildStagingDirectory = cxxDir
+        }
     }
     signingConfigs {
+         release {
+            if (project.hasProperty('MYAPP_UPLOAD_STORE_FILE')) {
+                storeFile file(MYAPP_UPLOAD_STORE_FILE)
+                storePassword MYAPP_UPLOAD_STORE_PASSWORD
+                keyAlias MYAPP_UPLOAD_KEY_ALIAS
+                keyPassword MYAPP_UPLOAD_KEY_PASSWORD
+            }
+        }
         debug {
             storeFile file('debug.keystore')
             storePassword 'android'
@@ -96,13 +136,27 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
         }
         release {
             // Caution! In production, you need to generate your own keystore file.
             // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
             minifyEnabled enableProguardInReleaseBuilds
-            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            shrinkResources true
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+    packaging {
+        resources {
+            excludes += [
+                "META-INF/*.kotlin_module",
+                "META-INF/AL2.0",
+                "META-INF/LGPL2.1",
+                "META-INF/LICENSE*",
+                "META-INF/NOTICE*",
+            ]
         }
     }
 }
@@ -118,4 +172,21 @@ dependencies {
     }
 }
 
+project.ext.vectoricons = [
+    iconFontNames: vectorIconFonts,
+]
+
 apply from: "../../node_modules/react-native-vector-icons/fonts.gradle"
+
+// Auto-copy the release APK and metadata to the default directory so React Native CLI can find it
+tasks.register("copyReleaseApk", Copy) {
+    from("${rootProject.projectDir}/../build/app/outputs/apk/release")
+    into("${projectDir}/build/outputs/apk/release")
+    include("**/*.apk", "**/*.json")
+}
+
+tasks.configureEach { task ->
+    if (task.name == "assembleRelease") {
+        task.finalizedBy("copyReleaseApk")
+    }
+}

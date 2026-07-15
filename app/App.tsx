@@ -1,13 +1,14 @@
 import React from 'react';
 import { StatusBar, StyleSheet, View, TouchableOpacity, Keyboard } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { NavigationContainer, NavigationIndependentTree } from '@react-navigation/native';
+import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import Icon from 'react-native-vector-icons/Feather';
 import Toast from 'react-native-toast-message';
+import { enableScreens } from 'react-native-screens';
+
 // @ts-ignore
 import { AppProvider, useApp } from './context/AppContext';
-
 // Import Screens
 // @ts-ignore
 import PremiumWatchScreen from './screens/PremiumWatchScreen';
@@ -23,6 +24,8 @@ import CatalogueBuilderScreen from './screens/CatalogueBuilderScreen';
 import PDFPreviewScreen from './screens/PDFPreviewScreen';
 
 const Stack = createStackNavigator();
+
+enableScreens();
 
 function App(): React.JSX.Element {
   const navigationRef = React.useRef<any>(null);
@@ -58,7 +61,6 @@ function AppNavigator(): React.JSX.Element {
     };
   }, []);
 
-
   // Determine active tab for bottom floating dock
   let activeTab = 'home';
   if (currentScreen === 'Dashboard') {
@@ -71,7 +73,6 @@ function AppNavigator(): React.JSX.Element {
     activeTab = 'catalogue';
   }
 
-  // Floating dock navigation handler
   const handleTabPress = (tabName: string) => {
     if (tabName === 'home') {
       resetTo('Dashboard');
@@ -83,6 +84,9 @@ function AppNavigator(): React.JSX.Element {
       resetTo('CatalogueBuilder');
     }
   };
+
+  console.log("currentScreen =>", currentScreen);
+  
 
   return (
     <View style={styles.container}>
@@ -104,58 +108,76 @@ function AppNavigator(): React.JSX.Element {
         <Stack.Screen name="CatalogueBuilder" component={CatalogueBuilderScreen} />
         <Stack.Screen name="PDFPreview" component={PDFPreviewScreen} />
       </Stack.Navigator>
-
-      {/* GLOBAL FLOATING BOTTOM NAVIGATION DOCK (Hidden when keyboard is active) */}
-      {!isKeyboardVisible && (
+      
+      {/* GLOBAL FLOATING BOTTOM NAVIGATION DOCK */}
+      {!isKeyboardVisible && currentScreen !== 'PremiumWatch' && (
         <View style={styles.bottomNavContainer}>
           <View style={styles.bottomNav}>
+            
+            {/* Tab 1: Home */}
             <TouchableOpacity
-              style={[styles.navItem, activeTab === 'home' && styles.navItemActiveWrapper]}
+              style={[
+                styles.navItem,
+                activeTab === 'home' ? styles.navItemActive : styles.navItemInactive
+              ]}
               onPress={() => handleTabPress('home')}
               activeOpacity={0.8}
             >
               <Icon
                 name="home"
-                size={20}
-                color={activeTab === 'home' ? '#000' : '#FFF'}
+                size={22}
+                color={activeTab === 'home' ? '#121212' : '#80848F'}
               />
             </TouchableOpacity>
 
+            {/* Tab 2: Repeat/Swap (Favorites proxy) */}
             <TouchableOpacity
-              style={[styles.navItem, activeTab === 'favorites' && styles.navItemActiveWrapper]}
+              style={[
+                styles.navItem,
+                activeTab === 'favorites' ? styles.navItemActive : styles.navItemInactive
+              ]}
               onPress={() => handleTabPress('favorites')}
               activeOpacity={0.8}
             >
               <Icon 
-                name="heart" 
-                size={20} 
-                color={activeTab === 'favorites' ? '#000' : '#FFF'} 
+                name="repeat" 
+                size={22} 
+                color={activeTab === 'favorites' ? '#121212' : '#80848F'} 
               />
             </TouchableOpacity>
 
+            {/* Tab 3: Activity/Stats (AddWatch proxy) */}
             <TouchableOpacity
-              style={[styles.navItem, activeTab === 'add' && styles.navItemActiveWrapper]}
+              style={[
+                styles.navItem,
+                activeTab === 'add' ? styles.navItemActive : styles.navItemInactive
+              ]}
               onPress={() => handleTabPress('add')}
               activeOpacity={0.8}
             >
               <Icon 
-                name="plus-circle" 
-                size={20} 
-                color={activeTab === 'add' ? '#000' : '#FFF'} 
+                name="activity" 
+                size={22} 
+                color={activeTab === 'add' ? '#121212' : '#80848F'} 
               />
             </TouchableOpacity>
 
+            {/* Tab 4: Menu (Catalogue proxy) */}
             <TouchableOpacity
-              style={[styles.navItem, activeTab === 'catalogue' && styles.navItemActiveWrapper]}
+              style={[
+                styles.navItem,
+                activeTab === 'catalogue' ? styles.navItemActive : styles.navItemInactive
+              ]}
               onPress={() => handleTabPress('catalogue')}
               activeOpacity={0.8}
             >
               <Icon 
-                name="book-open" 
-                size={20} 
-                color={activeTab === 'catalogue' ? '#000' : '#FFF'} 
+                name="menu" 
+                size={22} 
+                color={activeTab === 'catalogue' ? '#121212' : '#80848F'} 
               />
             </TouchableOpacity>
+
           </View>
         </View>
       )}
@@ -169,42 +191,45 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8F8FA',
   },
-  screenContainer: {
-    flex: 1,
-  },
   bottomNavContainer: {
     position: 'absolute',
-    bottom: 25,
+    bottom: 30, // slightly higher off the bottom edge
     left: 0,
     right: 0,
     alignItems: 'center',
-    zIndex: 9999, // Ensure it floats above all screen content
+    zIndex: 9999, 
   },
   bottomNav: {
     flexDirection: 'row',
-    backgroundColor: '#1C1C1C', // Deep premium dark grey/black
-    width: '80%',
-    height: 65,
-    borderRadius: 35,
-    justifyContent: 'space-around',
+    backgroundColor: '#121214', // Deep, dark almost-black outer pill
+    borderRadius: 100, // Fully rounded pill shape
+    padding: 6, // Padding to create the outer edge around inner circles
     alignItems: 'center',
-    paddingHorizontal: 10,
+    justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.25,
     shadowRadius: 20,
-    elevation: 10,
+    elevation: 15,
   },
   navItem: {
-    padding: 12,
+    width: 58,  // Fixed square dimension turned into circle
+    height: 58, 
+    borderRadius: 29, // Half of width/height for perfect circle
     justifyContent: 'center',
     alignItems: 'center',
+    marginHorizontal: 3, // Very tight spacing between icons
   },
-  navItemActiveWrapper: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 25,
-    width: 45,
-    height: 45,
+  navItemInactive: {
+    backgroundColor: '#212226', // Dark grey circular background for unselected
+  },
+  navItemActive: {
+    backgroundColor: '#FFFFFF', // Stark white background for selected
+    shadowColor: '#FFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 3,
   },
 });
 

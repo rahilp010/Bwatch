@@ -303,7 +303,7 @@ const PDFPreviewScreen = () => {
 
               {/* Dynamic Description Display */}
               {pdfConfig.showDesc && (
-                <Text style={styles.itemDescription}>
+                <Text style={styles.itemDescription} numberOfLines={6}>
                   {watch.description}
                 </Text>
               )}
@@ -512,10 +512,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 24,
-    paddingTop: 20,
+    paddingTop: 16,
     borderBottomWidth: 1,
     borderColor: '#F0F0F2',
-    paddingBottom: 8,
+    paddingBottom: 6,
   },
   pageHeaderLogo: {
     fontSize: 9,
@@ -529,8 +529,8 @@ const styles = StyleSheet.create({
   },
   imageStage: {
     marginHorizontal: 24,
-    marginVertical: 16,
-    height: 160,
+    marginVertical: 10,
+    height: 120,
     backgroundColor: '#F7F7F9',
     borderRadius: 8,
     justifyContent: 'center',
@@ -544,15 +544,15 @@ const styles = StyleSheet.create({
   },
   itemDetails: {
     paddingHorizontal: 24,
-    paddingBottom: 20,
+    paddingBottom: 12,
   },
   badge: {
     backgroundColor: '#F0F0F2',
     alignSelf: 'flex-start',
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderRadius: 4,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   badgeText: {
     fontSize: 8,
@@ -561,20 +561,20 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   itemTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: '#000',
     letterSpacing: -0.5,
   },
   itemPrice: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     color: '#444',
-    marginTop: 4,
-    marginBottom: 8,
+    marginTop: 3,
+    marginBottom: 6,
   },
   specTable: {
-    marginVertical: 12,
+    marginVertical: 8,
     borderWidth: 1,
     borderColor: '#EEEEEE',
     borderRadius: 6,
@@ -583,8 +583,8 @@ const styles = StyleSheet.create({
   specTableRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#F7F7F9',
   },
@@ -600,13 +600,13 @@ const styles = StyleSheet.create({
     color: '#000',
   },
   itemDescription: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#555',
-    lineHeight: 16,
+    lineHeight: 14,
   },
   contentPageFooter: {
-    marginTop: 20,
-    paddingTop: 16,
+    marginTop: 8,
+    paddingTop: 10,
     left: 0,
     right: 0,
   },
