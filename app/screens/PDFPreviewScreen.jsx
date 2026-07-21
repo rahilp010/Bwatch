@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -10,7 +10,6 @@ import {
   SafeAreaView,
   StatusBar,
   Dimensions,
-  Alert,
   ActivityIndicator,
   Platform,
 } from 'react-native';
@@ -23,58 +22,226 @@ import Toast from 'react-native-toast-message';
 import { useApp } from '../context/AppContext';
 
 const { width } = Dimensions.get('window');
-const PAGE_WIDTH = width - 40;
-// Standard A4 aspect ratio (1 : 1.414) for accurate print layout simulation
+const PAGE_WIDTH = width - 48;
 const PAGE_HEIGHT = PAGE_WIDTH * 1.414;
+
+// --- THEME CONSTANTS ---
+const THEME = {
+  background: '#FAFAFA',
+  surface: '#FFFFFF',
+  primary: '#000000ff',
+  textDark: '#232F2C',
+  textMuted: '#7E918C',
+  imageBg: '#E0EAE8',
+};
+
+// Helper to chunk array for grid
+const chunkArray = (arr, size) => {
+  return arr.reduce(
+    (acc, _, i) => (i % size ? acc : [...acc, arr.slice(i, i + size)]),
+    [],
+  );
+};
+
+// Cover Page Component for individual watch
+const WatchCoverPage = ({ watch, style, pdfConfig }) => {
+  return (
+    <View style={[styles.heroPageContainer, style.borderStyle]}>
+      <Text
+        style={[
+          styles.heroMainTitle,
+          { fontFamily: style.text.fontFamily },
+        ]}
+      >
+        {watch.name || 'Watch Name Here'}
+      </Text>
+
+      <View style={styles.heroImageWrapper}>
+        <Image
+          source={{ uri: watch.image }}
+          style={styles.heroImage}
+          resizeMode="contain"
+        />
+      </View>
+
+      {/* Bottom Right Description Box */}
+      <View style={styles.heroDescBox}>
+        <Text style={styles.heroDescTitle}>DESCRIPTION</Text>
+
+        <View style={styles.heroSpecRow}>
+          <Text style={styles.heroSpecLabel}>Brand</Text>
+          <Text style={styles.heroSpecValue}>
+            {watch.brand || 'N/A'}
+          </Text>
+        </View>
+        <View style={styles.heroSpecRow}>
+          <Text style={styles.heroSpecLabel}>Gender</Text>
+          <Text style={styles.heroSpecValue}>
+            {watch.gender || 'Unisex'}
+          </Text>
+        </View>
+        <View style={styles.heroSpecRow}>
+          <Text style={styles.heroSpecLabel}>Type</Text>
+          <Text style={styles.heroSpecValue}>
+            {watch.type || 'Analogue'}
+          </Text>
+        </View>
+        <View style={styles.heroSpecRow}>
+          <Text style={styles.heroSpecLabel}>Dial Color</Text>
+          <Text style={styles.heroSpecValue}>
+            {watch.color || 'Standard'}
+          </Text>
+        </View>
+        <View style={styles.heroSpecRow}>
+          <Text style={styles.heroSpecLabel}>Strap</Text>
+          <Text style={styles.heroSpecValue}>
+            {watch.strap || 'Leather/Metal'}
+          </Text>
+        </View>
+        {watch.price && (
+          <View style={styles.heroSpecRow}>
+            <Text style={styles.heroSpecLabel}>Price</Text>
+            <Text style={styles.heroSpecValue}>₹{watch.price}</Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+};
 
 const PDFPreviewScreen = () => {
   const { params, watches, goBack } = useApp();
-  
-  // Refs for capturing PDF pages
-  const coverPageRef = useRef(null);
-  const contentPageRef = useRef(null);
 
-  // Load target watch and config params
+  const coverPageRef = useRef(null);
+  const contentPageRefs = useRef([]);
+  // For separate mode, we need refs for each watch's cover page
+  const individualCoverRefs = useRef([]);
+
   const watchId = params?.watchId;
-  const watch = watches.find(w => w.id === watchId) || (watches.length > 0 ? watches[0] : null);
-  const pdfConfig = params?.pdfConfig || { showPrice: true, showLogo: true, showDesc: true };
+  const selectedWatchIds = useMemo(
+    () => params?.selectedWatchIds || [],
+    [params?.selectedWatchIds],
+  );
+  const pdfMode = params?.pdfMode || 'single';
+  const watch =
+    watches.find(w => w.id === watchId) ||
+    (watches.length > 0 ? watches[0] : null);
+
+  const pdfConfig = params?.pdfConfig || {
+    showPrice: true,
+    showLogo: true,
+    showDesc: true,
+    template: 'minimal',
+    accentColor: '#121212',
+    customBgColor: '#FFFFFF',
+    fontFamily: 'sans-serif',
+    borderType: 'none',
+    coverTitle: 'B-WATCH',
+    coverSubtitle: 'OFFICIAL CATALOGUE',
+    watermarkText: 'B-WATCH',
+  };
+
+  const targetWatches =
+    selectedWatchIds.length > 0
+      ? watches.filter(w => selectedWatchIds.includes(w.id))
+      : watch
+      ? [watch]
+      : [];
+
+  // Split into chunks of 9 (3 rows x 3 columns)
+  const watchChunks = chunkArray(targetWatches, 9);
+
+  if (contentPageRefs.current.length !== watchChunks.length) {
+    contentPageRefs.current = Array(watchChunks.length)
+      .fill(null)
+      .map((_, i) => contentPageRefs.current[i] || React.createRef());
+  }
+
+  // Initialize individual cover refs for separate mode
+  if (pdfMode === 'separate' && individualCoverRefs.current.length !== targetWatches.length) {
+    individualCoverRefs.current = Array(targetWatches.length)
+      .fill(null)
+      .map((_, i) => individualCoverRefs.current[i] || React.createRef());
+  }
 
   const [isSharing, setIsSharing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [currentDownloadIndex, setCurrentDownloadIndex] = useState(0);
+  const [totalDownloads, setTotalDownloads] = useState(0);
 
-  // Staggered animation setup for the PDF pages
   const animValues = useRef(
-    [...Array(3)].map(() => new Animated.Value(0)),
+    [...Array(4)].map(() => new Animated.Value(0)),
   ).current;
 
   useEffect(() => {
     const animations = animValues.map(anim =>
       Animated.timing(anim, {
         toValue: 1,
-        duration: 600,
+        duration: 500,
         useNativeDriver: true,
       }),
     );
     Animated.stagger(150, animations).start();
-  }, [watchId]);
+  }, [watchId, selectedWatchIds, animValues]);
 
   const getAnimStyle = index => ({
-    opacity: animValues[index],
+    opacity: animValues[index] || animValues[0],
     transform: [
       {
-        translateY: animValues[index].interpolate({
+        translateY: (animValues[index] || animValues[0]).interpolate({
           inputRange: [0, 1],
-          outputRange: [40, 0],
+          outputRange: [30, 0],
         }),
       },
     ],
   });
 
-  if (!watch) {
+  const getDynamicStyle = () => {
+    const accent = pdfConfig.accentColor || '#121212';
+    const bg = pdfConfig.customBgColor || '#FFFFFF';
+    const isDarkBg = ['#1A1A1A', '#0A1118'].includes(bg);
+    const selectedFont =
+      pdfConfig.fontFamily === 'serif'
+        ? Platform.OS === 'ios'
+          ? 'Georgia'
+          : 'serif'
+        : pdfConfig.fontFamily === 'monospace'
+        ? Platform.OS === 'ios'
+          ? 'Courier'
+          : 'monospace'
+        : 'System';
+
+    const textStyle = {
+      fontFamily: selectedFont,
+      color: isDarkBg ? '#FFFFFF' : '#000000',
+    };
+
+    let borderStyle = {};
+    if (pdfConfig.borderType === 'single')
+      borderStyle = { borderWidth: 2, borderColor: accent };
+    else if (pdfConfig.borderType === 'dotted')
+      borderStyle = {
+        borderWidth: 2,
+        borderColor: accent,
+        borderStyle: 'dotted',
+      };
+
+    return {
+      page: { backgroundColor: bg, ...borderStyle },
+      text: textStyle,
+      accentText: { ...textStyle, color: accent },
+      mutedText: { ...textStyle, color: isDarkBg ? '#999999' : '#666666' },
+      borderStyle,
+      isDarkBg,
+      accent,
+    };
+  };
+
+  if (targetWatches.length === 0) {
     return (
       <SafeAreaView style={styles.errorContainer}>
-        <Icon name="alert-triangle" size={48} color="#FF9800" />
-        <Text style={styles.errorText}>No timepiece is selected for PDF generation.</Text>
+        <Icon name="alert-triangle" size={48} color={THEME.textMuted} />
+        <Text style={styles.errorText}>No timepiece selected.</Text>
         <TouchableOpacity style={styles.errorButton} onPress={() => goBack()}>
           <Text style={styles.errorButtonText}>Go Back</Text>
         </TouchableOpacity>
@@ -82,59 +249,114 @@ const PDFPreviewScreen = () => {
     );
   }
 
-  // Action: Share PDF (shares Cover and Content pages as JPEGs/PNGs)
   const handleShare = async () => {
     setIsSharing(true);
     try {
-      // Capture Cover Page and Content Page as images
       const coverUri = await captureRef(coverPageRef, {
         format: 'jpeg',
         quality: 0.85,
       });
-      const contentUri = await captureRef(contentPageRef, {
-        format: 'jpeg',
-        quality: 0.85,
-      });
-
+      const contentUris = [];
+      for (let i = 0; i < watchChunks.length; i++) {
+        if (contentPageRefs.current[i]) {
+          const uri = await captureRef(contentPageRefs.current[i], {
+            format: 'jpeg',
+            quality: 0.85,
+          });
+          contentUris.push(uri);
+        }
+      }
       await Share.open({
-        urls: [coverUri, contentUri],
+        urls: [coverUri, ...contentUris],
         type: 'image/jpeg',
-        title: 'Share Watch Catalogue',
+        title: 'Share Catalogue',
       });
     } catch (error) {
-      console.log('Error sharing: ', error);
+      if (error && error.message && error.message.includes('User did not share')) {
+        return;
+      }
       Toast.show({
         type: 'error',
         text1: 'Share Error',
-        text2: 'An error occurred while trying to share the catalogue.',
+        text2: 'Failed to share catalogue.',
       });
     } finally {
       setIsSharing(false);
     }
   };
 
-  // Action: Download PDF (creates a real PDF document from screenshots and saves it)
-  const handleDownload = async () => {
-    setIsDownloading(true);
-    try {
-      // Capture both pages as base64 png
-      const coverBase64 = await captureRef(coverPageRef, {
-        format: 'png',
-        result: 'base64',
-      });
-      const contentBase64 = await captureRef(contentPageRef, {
-        format: 'png',
-        result: 'base64',
-      });
+  // Generate single PDF (all watches combined)
+  const generateSinglePDF = async () => {
+    const coverBase64 = await captureRef(coverPageRef, {
+      format: 'png',
+      result: 'base64',
+    });
+    const contentBase64s = [];
+    for (let i = 0; i < watchChunks.length; i++) {
+      if (contentPageRefs.current[i]) {
+        const base64 = await captureRef(contentPageRefs.current[i], {
+          format: 'png',
+          result: 'base64',
+        });
+        contentBase64s.push(base64);
+      }
+    }
 
-      // Create PDF using pdf-lib
+    const pdfDoc = await PDFDocument.create();
+    const coverImg = await pdfDoc.embedPng(coverBase64);
+    const page1 = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+    page1.drawImage(coverImg, {
+      x: 0,
+      y: 0,
+      width: PAGE_WIDTH,
+      height: PAGE_HEIGHT,
+    });
+
+    for (const base64 of contentBase64s) {
+      const img = await pdfDoc.embedPng(base64);
+      const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+      page.drawImage(img, {
+        x: 0,
+        y: 0,
+        width: PAGE_WIDTH,
+        height: PAGE_HEIGHT,
+      });
+    }
+
+    const pdfBase64 = await pdfDoc.saveAsBase64();
+    const fileName = `Catalogue_${new Date().getTime()}.pdf`;
+    const filePath = `${RNFS.CachesDirectoryPath}/${fileName}`;
+
+    await RNFS.writeFile(filePath, pdfBase64, 'base64');
+    return filePath;
+  };
+
+  // Generate separate PDF for each watch with watch-specific cover
+  const generateSeparatePDFs = async () => {
+    const filePaths = [];
+
+    for (let watchIndex = 0; watchIndex < targetWatches.length; watchIndex++) {
+      setCurrentDownloadIndex(watchIndex + 1);
+
+      const currentWatch = targetWatches[watchIndex];
+
+      // Capture watch-specific cover page
+      let coverBase64;
+      if (individualCoverRefs.current[watchIndex]) {
+        coverBase64 = await captureRef(individualCoverRefs.current[watchIndex], {
+          format: 'png',
+          result: 'base64',
+        });
+      } else {
+        // Fallback to shared cover if individual ref not available
+        coverBase64 = await captureRef(coverPageRef, {
+          format: 'png',
+          result: 'base64',
+        });
+      }
+
       const pdfDoc = await PDFDocument.create();
-
-      // Embed images
       const coverImg = await pdfDoc.embedPng(coverBase64);
-      const contentImg = await pdfDoc.embedPng(contentBase64);
-
-      // Page 1
       const page1 = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
       page1.drawImage(coverImg, {
         x: 0,
@@ -143,225 +365,351 @@ const PDFPreviewScreen = () => {
         height: PAGE_HEIGHT,
       });
 
-      // Page 2
-      const page2 = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-      page2.drawImage(contentImg, {
-        x: 0,
-        y: 0,
-        width: PAGE_WIDTH,
-        height: PAGE_HEIGHT,
-      });
+      // Find which chunk this watch belongs to and capture that page
+      for (let chunkIndex = 0; chunkIndex < watchChunks.length; chunkIndex++) {
+        const chunk = watchChunks[chunkIndex];
+        const watchInChunk = chunk.find(w => w.id === currentWatch.id);
 
-      // Save PDF as bytes
-      const pdfBytes = await pdfDoc.save();
+        if (watchInChunk && contentPageRefs.current[chunkIndex]) {
+          const contentBase64 = await captureRef(contentPageRefs.current[chunkIndex], {
+            format: 'png',
+            result: 'base64',
+          });
+          const contentImg = await pdfDoc.embedPng(contentBase64);
+          const contentPage = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+          contentPage.drawImage(contentImg, {
+            x: 0,
+            y: 0,
+            width: PAGE_WIDTH,
+            height: PAGE_HEIGHT,
+          });
+          break;
+        }
+      }
 
-      // Convert to base64 for file writing
-      const pdfBase64 = Array.from(pdfBytes)
-        .map(b => String.fromCharCode(b))
-        .join('');
-      const pdfDataUri = `data:application/pdf;base64,${btoa(pdfBase64)}`;
+      const pdfBase64 = await pdfDoc.saveAsBase64();
+      const safeName = `${currentWatch.brand || 'Watch'}_${currentWatch.name || 'Model'}`.replace(/[^a-zA-Z0-9]/g, '_');
+      const fileName = `${safeName}_${new Date().getTime()}.pdf`;
+      const filePath = `${RNFS.CachesDirectoryPath}/${fileName}`;
 
-      // Determine download directory based on platform
-      const downloadDir = Platform.OS === 'android' 
-        ? RNFS.DownloadDirectoryPath 
-        : RNFS.DocumentDirectoryPath;
-      
-      const safeBrand = watch.brand.replace(/[^a-zA-Z0-9]/g, '_');
-      const safeName = watch.name.replace(/[^a-zA-Z0-9]/g, '_');
-      const fileName = `${safeBrand}_${safeName}_Catalogue.pdf`;
-      const filePath = `${downloadDir}/${fileName}`;
+      await RNFS.writeFile(filePath, pdfBase64, 'base64');
+      filePaths.push(filePath);
+    }
 
-      // Write file to device
-      await RNFS.writeFile(filePath, pdfDataUri.split(',')[1], 'base64');
+    return filePaths;
+  };
+
+  const handleDownload = async () => {
+    setIsDownloading(true);
+    try {
+      let filePaths = [];
+
+      if (pdfMode === 'separate' && targetWatches.length > 1) {
+        setTotalDownloads(targetWatches.length);
+        filePaths = await generateSeparatePDFs();
+
+        // Share all PDFs
+        await Share.open({
+          urls: filePaths.map(fp => Platform.OS === 'android' ? `file://${fp}` : fp),
+          type: 'application/pdf',
+          saveToFiles: true,
+          title: 'Save PDF Catalogues',
+        });
+      } else {
+        setTotalDownloads(1);
+        setCurrentDownloadIndex(1);
+        const filePath = await generateSinglePDF();
+        filePaths = [filePath];
+
+        await Share.open({
+          url: Platform.OS === 'android' ? `file://${filePath}` : filePath,
+          type: 'application/pdf',
+          saveToFiles: true,
+          title: 'Save PDF Catalogue',
+        });
+      }
 
       Toast.show({
         type: 'success',
-        text1: 'PDF Saved',
-        text2: `Catalogue PDF saved to ${fileName}`,
+        text1: 'Saved',
+        text2: pdfMode === 'separate' && targetWatches.length > 1
+          ? `${filePaths.length} PDFs saved successfully!`
+          : 'Catalogue saved successfully!',
       });
     } catch (error) {
-      console.log('Error generating PDF: ', error);
+      if (error && error.message && error.message.includes('User did not share')) {
+        return;
+      }
       Toast.show({
         type: 'error',
         text1: 'PDF Error',
-        text2: 'An error occurred while generating the PDF document.',
+        text2: 'Failed to save PDF.',
       });
     } finally {
       setIsDownloading(false);
+      setCurrentDownloadIndex(0);
+      setTotalDownloads(0);
     }
+  };
+
+  const heroWatch = targetWatches[0];
+  const style = getDynamicStyle();
+
+  // Render individual cover pages for separate mode (hidden, used for capture)
+  const renderIndividualCoverPages = () => {
+    if (pdfMode !== 'separate' || targetWatches.length <= 1) return null;
+    
+    return (
+      <View style={{ position: 'absolute', left: -9999, top: 0 }}>
+        {targetWatches.map((w, index) => (
+          <View
+            key={w.id}
+            ref={el => {
+              individualCoverRefs.current[index] = el;
+            }}
+            collapsable={false}
+            style={{
+              width: PAGE_WIDTH,
+              height: PAGE_HEIGHT,
+              opacity: 0.99,
+            }}
+          >
+            <WatchCoverPage watch={w} style={style} pdfConfig={pdfConfig} />
+          </View>
+        ))}
+      </View>
+    );
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F9F9FB" />
+      <StatusBar barStyle="dark-content" backgroundColor={THEME.background} />
 
       {/* HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.iconButton} onPress={() => goBack()}>
-          <Icon name="arrow-left" size={24} color="#000" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>PDF Preview</Text>
-        <TouchableOpacity style={styles.iconButton} onPress={handleShare}>
-          <Icon name="share-2" size={20} color="#000" />
+      <View style={styles.headerRow}>
+        <Text style={styles.heroText}>Catalogue Preview</Text>
+
+        <TouchableOpacity
+          style={styles.iconButton}
+          onPress={handleShare}
+          disabled={isSharing}
+        >
+          {isSharing ? (
+            <ActivityIndicator size="small" color={THEME.textDark} />
+          ) : (
+            <Icon name="share-2" size={20} color={THEME.textDark} />
+          )}
         </TouchableOpacity>
       </View>
+
+      {/* PDF Mode Indicator */}
+      {pdfMode === 'separate' && targetWatches.length > 1 && (
+        <View style={styles.modeIndicator}>
+          <Icon name="copy" size={16} color={THEME.primary} />
+          <Text style={styles.modeIndicatorText}>
+            Separate PDFs Mode ({targetWatches.length} PDFs will be generated)
+          </Text>
+        </View>
+      )}
+
+      {/* Hidden individual cover pages for separate mode capture */}
+      {renderIndividualCoverPages()}
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* PAGE 1: COVER PAGE */}
-        <Animated.View style={[styles.pdfPage, getAnimStyle(0)]}>
-          <View ref={coverPageRef} collapsable={false} style={{ flex: 1, backgroundColor: '#FFFFFF', padding: 24, paddingVertical: 32 }}>
-            {/* Faint watermark graphic */}
-            <View style={styles.graphicOverlay}>
-              <View style={styles.graphicStrapTop} />
-              <View style={styles.graphicFace} />
-              <View style={styles.graphicStrapBottom} />
-            </View>
-
-            <View style={styles.coverTopContent}>
-              {pdfConfig.showLogo && (
-                <View style={styles.brandRow}>
-                  <Icon name="watch" size={16} color="#000" />
-                  <Text style={styles.brandText}>B-WATCH</Text>
-                </View>
-              )}
-              
-              <Text style={styles.coverTitle}>{watch.brand.toUpperCase()}</Text>
-              <Text style={styles.coverSubTitle}>{watch.name.toUpperCase()}</Text>
-              <View style={styles.titleUnderline} />
-              <Text style={styles.coverDate}>OFFICIAL CATALOGUE</Text>
-            </View>
-
-            <View style={styles.coverFooter}>
-              <View style={styles.footerDivider} />
-              <View style={styles.footerRow}>
-                <View>
-                  <Text style={styles.footerTextPrimary}>
-                    Dealer Verification Copy
-                  </Text>
-                  <Text style={styles.footerTextSecondary}>Ref: BW-{watch.id}-CAT</Text>
-                </View>
-                <Text style={styles.pageNumber}>01</Text>
-              </View>
-            </View>
-          </View>
-        </Animated.View>
-
-        {/* PAGE 2: CONTENT PAGE */}
+        {/* PAGE 1: HERO COVER */}
         <Animated.View style={[styles.pdfPage, getAnimStyle(1)]}>
-          <View ref={contentPageRef} collapsable={false} style={{ flex: 1, backgroundColor: '#FFFFFF', padding: 24 }}>
-            {pdfConfig.showLogo && (
-              <View style={styles.contentPageHeader}>
-                <Text style={styles.pageHeaderLogo}>B-WATCH CATALOGUE</Text>
-                <Text style={styles.pageHeaderRef}>Ref: BW-{watch.id}</Text>
-              </View>
-            )}
+          <View
+            ref={coverPageRef}
+            collapsable={false}
+            style={[styles.heroPageContainer, style.borderStyle]}
+          >
+            <Text
+              style={[
+                styles.heroMainTitle,
+                { fontFamily: style.text.fontFamily },
+              ]}
+            >
+              {heroWatch.name || 'Watch Name Here'}
+            </Text>
 
-            <View style={styles.imageStage}>
+            <View style={styles.heroImageWrapper}>
               <Image
-                source={{ uri: watch.image }}
-                style={styles.watchImage}
+                source={{ uri: heroWatch.image }}
+                style={styles.heroImage}
                 resizeMode="contain"
               />
             </View>
 
-            <View style={styles.itemDetails}>
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>TIMEPIECE SPECIFICATIONS</Text>
-              </View>
-              
-              <Text style={styles.itemTitle}>{watch.brand} {watch.name}</Text>
-              
-              {/* Dynamic Price Display */}
-              {pdfConfig.showPrice && (
-                <Text style={styles.itemPrice}>
-                  {watch.price ? `$${parseFloat(watch.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : 'N/A'}
-                </Text>
-              )}
+            {/* Bottom Right Description Box */}
+            <View style={styles.heroDescBox}>
+              <Text style={styles.heroDescTitle}>DESCRIPTION</Text>
 
-              {/* Spec Table */}
-              <View style={styles.specTable}>
-                <View style={styles.specTableRow}>
-                  <Text style={styles.specTableLabel}>GENDER</Text>
-                  <Text style={styles.specTableValue}>{watch.gender || 'Men'}</Text>
-                </View>
-                <View style={styles.specTableRow}>
-                  <Text style={styles.specTableLabel}>STRAP TYPE</Text>
-                  <Text style={styles.specTableValue}>{watch.strap || 'Metal'}</Text>
-                </View>
-                <View style={styles.specTableRow}>
-                  <Text style={styles.specTableLabel}>WATCH TYPE</Text>
-                  <Text style={styles.specTableValue}>{watch.type || 'Analogue'}</Text>
-                </View>
-                <View style={styles.specTableRow}>
-                  <Text style={styles.specTableLabel}>DIAL COLOR</Text>
-                  <Text style={styles.specTableValue}>{watch.color || 'Silver'}</Text>
-                </View>
-              </View>
-
-              {/* Dynamic Description Display */}
-              {pdfConfig.showDesc && (
-                <Text style={styles.itemDescription} numberOfLines={6}>
-                  {watch.description}
+              <View style={styles.heroSpecRow}>
+                <Text style={styles.heroSpecLabel}>Brand</Text>
+                <Text style={styles.heroSpecValue}>
+                  {heroWatch.brand || 'N/A'}
                 </Text>
-              )}
-              
-              <View style={styles.contentPageFooter}>
-                <View style={styles.footerDivider} />
-                <View style={styles.footerRow}>
-                  <Text style={styles.footerTextSecondary}>© 2026 B-Watch International Ltd.</Text>
-                  <Text style={styles.pageNumber}>02</Text>
-                </View>
               </View>
+              <View style={styles.heroSpecRow}>
+                <Text style={styles.heroSpecLabel}>Gender</Text>
+                <Text style={styles.heroSpecValue}>
+                  {heroWatch.gender || 'Unisex'}
+                </Text>
+              </View>
+              <View style={styles.heroSpecRow}>
+                <Text style={styles.heroSpecLabel}>Type</Text>
+                <Text style={styles.heroSpecValue}>
+                  {heroWatch.type || 'Analogue'}
+                </Text>
+              </View>
+              <View style={styles.heroSpecRow}>
+                <Text style={styles.heroSpecLabel}>Dial Color</Text>
+                <Text style={styles.heroSpecValue}>
+                  {heroWatch.color || 'Standard'}
+                </Text>
+              </View>
+              <View style={styles.heroSpecRow}>
+                <Text style={styles.heroSpecLabel}>Strap</Text>
+                <Text style={styles.heroSpecValue}>
+                  {heroWatch.strap || 'Leather/Metal'}
+                </Text>
+              </View>
+              {heroWatch.price && (
+                <View style={styles.heroSpecRow}>
+                  <Text style={styles.heroSpecLabel}>Price</Text>
+                  <Text style={styles.heroSpecValue}>₹{heroWatch.price}</Text>
+                </View>
+              )}
             </View>
           </View>
         </Animated.View>
 
-        {/* END MARKER */}
-        <Animated.View style={[styles.endMarkerContainer, getAnimStyle(2)]}>
-          <Text style={styles.endMarkerText}>END OF DOCUMENT</Text>
-        </Animated.View>
+        {/* PAGE 2+: GRID CONTENT */}
+        {watchChunks.map((chunk, pageIndex) => (
+          <Animated.View
+            key={pageIndex}
+            style={[styles.pdfPage, getAnimStyle(Math.min(pageIndex + 2, 3))]}
+          >
+            <View
+              ref={el => {
+                contentPageRefs.current[pageIndex] = el;
+              }}
+              collapsable={false}
+              style={[styles.gridPageContainer, style.page]}
+            >
+              <View
+                style={[
+                  styles.gridContent,
+                  targetWatches.length === 1 && styles.gridContentCentered,
+                ]}
+              >
+                {chunk.map(item => (
+                  <View
+                    key={item.id}
+                    style={[
+                      styles.gridItem,
+                      targetWatches.length === 1 && styles.gridItemSingle,
+                    ]}
+                  >
+                    <Image
+                      source={{ uri: item.image }}
+                      style={styles.gridItemImage}
+                      resizeMode="contain"
+                    />
 
-        {/* Space for absolute bottom actions and global bottom dock */}
+                    <Text
+                      style={[styles.gridItemName, style.text]}
+                      numberOfLines={1}
+                    >
+                      {item.name || 'Product Name'}
+                    </Text>
+
+                    <Text style={[styles.gridItemCode, style.mutedText]}>
+                      CODE: W_{item.id.substring(0, 5)}
+                    </Text>
+
+                    {pdfConfig.showPrice && (
+                      <>
+                        <View style={styles.gridItemDivider} />
+                        <Text style={[styles.gridItemPrice, style.text]}>
+                          ₹{' '}
+                          {item.price
+                            ? parseFloat(item.price).toFixed(2)
+                            : '0.00'}
+                        </Text>
+                      </>
+                    )}
+
+                    {/* Decorative Dots */}
+                    <View style={styles.gridItemDots}>
+                      <View
+                        style={[
+                          styles.dot,
+                          { backgroundColor: style.mutedText.color },
+                        ]}
+                      />
+                      <View
+                        style={[
+                          styles.dot,
+                          { backgroundColor: style.mutedText.color },
+                        ]}
+                      />
+                      <View
+                        style={[
+                          styles.dot,
+                          { backgroundColor: style.mutedText.color },
+                        ]}
+                      />
+                      <View
+                        style={[
+                          styles.dot,
+                          { backgroundColor: style.mutedText.color },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                ))}
+              </View>
+
+              <View style={styles.gridPageFooter}>
+                <Text style={[styles.gridFooterText, style.mutedText]}>
+                  {pdfConfig.coverTitle} / {pdfConfig.coverSubtitle} — Page{' '}
+                  {pageIndex + 1}
+                </Text>
+              </View>
+            </View>
+          </Animated.View>
+        ))}
+
         <View style={{ height: 160 }} />
       </ScrollView>
 
-      {/* BOTTOM ACTION BAR */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity 
-          style={styles.secondaryButton} 
-          activeOpacity={0.7} 
-          onPress={handleShare}
-          disabled={isSharing}
-        >
-          {isSharing ? (
-            <ActivityIndicator size="small" color="#000" />
-          ) : (
-            <>
-              <Icon name="share" size={18} color="#000" style={styles.btnIcon} />
-              <Text style={styles.secondaryButtonText}>SHARE</Text>
-            </>
-          )}
-        </TouchableOpacity>
+      {/* FLOATING DOWNLOAD BUTTON */}
+      <TouchableOpacity
+        style={styles.downloadFab}
+        onPress={handleDownload}
+        disabled={isDownloading}
+        activeOpacity={0.8}
+      >
+        {isDownloading ? (
+          <ActivityIndicator size="small" color={THEME.surface} />
+        ) : (
+          <Icon name="download" size={24} color={THEME.surface} />
+        )}
+      </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.primaryButton} 
-          activeOpacity={0.8} 
-          onPress={handleDownload}
-          disabled={isDownloading}
-        >
-          {isDownloading ? (
-            <ActivityIndicator size="small" color="#FFF" />
-          ) : (
-            <>
-              <Icon name="download" size={18} color="#FFF" style={styles.btnIcon} />
-              <Text style={styles.primaryButtonText}>DOWNLOAD</Text>
-            </>
-          )}
-        </TouchableOpacity>
-      </View>
+      {/* Download Progress Indicator */}
+      {isDownloading && totalDownloads > 1 && (
+        <View style={styles.downloadProgress}>
+          <Text style={styles.downloadProgressText}>
+            Generating PDF {currentDownloadIndex} of {totalDownloads}...
+          </Text>
+        </View>
+      )}
+
       <Toast />
     </SafeAreaView>
   );
@@ -371,329 +719,234 @@ const PDFPreviewScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9F9FB', // Light off-white base
+    backgroundColor: THEME.background,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
-    backgroundColor: '#F9F9FB',
-  },
-  iconButton: {
-    padding: 6,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#000',
-    letterSpacing: -0.2,
-  },
-  scrollContent: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  pdfPage: {
-    width: PAGE_WIDTH,
-    height: PAGE_HEIGHT,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#EAEAEA',
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  // -- Abstract Cover Graphic --
-  graphicOverlay: {
-    position: 'absolute',
-    top: -20,
-    right: 40,
-    alignItems: 'center',
-    opacity: 0.03,
-    zIndex: 0,
-  },
-  graphicStrapTop: { width: 40, height: 60, backgroundColor: '#000' },
-  graphicFace: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: '#000',
-    borderWidth: 15,
-    borderColor: '#FFF',
-  },
-  graphicStrapBottom: { width: 40, height: 60, backgroundColor: '#000' },
-
-  // -- Cover Page Content --
-  coverTopContent: {
-    padding: 32,
-    paddingTop: 60,
-    zIndex: 1,
-  },
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 25,
-  },
-  brandText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#666',
-    letterSpacing: 2,
-    marginLeft: 6,
-  },
-  coverTitle: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#000',
-    letterSpacing: -0.5,
-  },
-  coverSubTitle: {
-    fontSize: 18,
-    fontWeight: '300',
-    color: '#444',
-    marginTop: 4,
-    letterSpacing: 0.5,
-  },
-  titleUnderline: {
-    width: 45,
-    height: 3,
-    backgroundColor: '#000',
-    marginTop: 15,
-    marginBottom: 25,
-  },
-  coverDate: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#888',
-    letterSpacing: 1.5,
-  },
-  coverFooter: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 32,
-  },
-  footerDivider: {
-    height: 1,
-    backgroundColor: '#EAEAEA',
-    marginBottom: 16,
-  },
-  footerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-  },
-  footerTextPrimary: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#333',
-    marginBottom: 4,
-  },
-  footerTextSecondary: {
-    fontSize: 9,
-    color: '#888',
-  },
-  pageNumber: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#000',
-  },
-  // -- Content Page Details --
-  contentPageHeader: {
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 24,
     paddingTop: 16,
-    borderBottomWidth: 1,
-    borderColor: '#F0F0F2',
-    paddingBottom: 6,
+    paddingBottom: 20,
   },
-  pageHeaderLogo: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#666',
-    letterSpacing: 1,
-  },
-  pageHeaderRef: {
-    fontSize: 9,
-    color: '#999',
-  },
-  imageStage: {
-    marginHorizontal: 24,
-    marginVertical: 10,
-    height: 120,
-    backgroundColor: '#F7F7F9',
-    borderRadius: 8,
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: THEME.surface,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#EEEEEE',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
   },
-  watchImage: {
-    width: '85%',
-    height: '85%',
+  scrollContent: {
+    paddingBottom: 40,
+    alignItems: 'center',
   },
-  itemDetails: {
-    paddingHorizontal: 24,
-    paddingBottom: 12,
-  },
-  badge: {
-    backgroundColor: '#F0F0F2',
+  heroText: {
+    fontSize: 28,
+    fontWeight: '400',
+    color: THEME.textDark,
     alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-    marginBottom: 6,
-  },
-  badgeText: {
-    fontSize: 8,
-    fontWeight: '800',
-    color: '#555',
-    letterSpacing: 0.5,
-  },
-  itemTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#000',
     letterSpacing: -0.5,
   },
-  itemPrice: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#444',
-    marginTop: 3,
-    marginBottom: 6,
+  modeIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: THEME.surface,
+    marginHorizontal: 24,
+    marginBottom: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  specTable: {
-    marginVertical: 8,
-    borderWidth: 1,
-    borderColor: '#EEEEEE',
-    borderRadius: 6,
+  modeIndicatorText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: THEME.primary,
+    marginLeft: 8,
+  },
+  pdfPage: {
+    width: PAGE_WIDTH,
+    height: PAGE_HEIGHT,
+    backgroundColor: THEME.surface,
+    borderRadius: 8,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 6,
     overflow: 'hidden',
   },
-  specTableRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F7F7F9',
+  heroPageContainer: {
+    flex: 1,
+    backgroundColor: '#1A1A1A',
+    position: 'relative',
+    overflow: 'hidden',
   },
-  specTableLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#888',
-    letterSpacing: 0.5,
-  },
-  specTableValue: {
-    fontSize: 9,
-    fontWeight: '600',
-    color: '#000',
-  },
-  itemDescription: {
-    fontSize: 10,
-    color: '#555',
-    lineHeight: 14,
-  },
-  contentPageFooter: {
-    marginTop: 8,
-    paddingTop: 10,
-    left: 0,
-    right: 0,
-  },
-  // -- End Marker --
-  endMarkerContainer: {
-    paddingVertical: 20,
-  },
-  endMarkerText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#B0B0B0',
-    letterSpacing: 1.5,
-  },
-  // -- Bottom Action Bar --
-  bottomBar: {
+  heroMainTitle: {
     position: 'absolute',
-    bottom: 95, // Float above the global bottom nav
-    left: 20,
-    right: 20,
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
+    top: 40,
+    left: 30,
+    fontSize: 26,
+    fontWeight: '300',
+    color: '#FFFFFF',
+    letterSpacing: 1.5,
     zIndex: 10,
   },
-  btnIcon: {
-    marginRight: 6,
-  },
-  secondaryButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+  heroImageWrapper: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  heroImage: { width: '120%', height: '120%', transform: [{ scale: 1.1 }] },
+  heroDescBox: {
+    position: 'absolute',
+    bottom: 30,
+    right: 30,
+    backgroundColor: 'rgba(30,30,30,0.95)',
+    padding: 16,
+    width: 180,
     borderWidth: 1,
-    borderColor: '#000',
-    borderRadius: 12,
-    paddingVertical: 14,
-    marginRight: 10,
+    borderColor: '#333',
   },
-  secondaryButtonText: {
-    fontSize: 13,
+  heroDescTitle: {
+    color: '#FFF',
+    fontSize: 11,
     fontWeight: '700',
-    color: '#000',
+    letterSpacing: 1,
+    marginBottom: 12,
   },
-  primaryButton: {
+  heroSpecRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  heroSpecLabel: { color: '#999', fontSize: 9 },
+  heroSpecValue: {
+    color: '#FFF',
+    fontSize: 9,
+    fontWeight: '500',
+    maxWidth: 90,
+    textAlign: 'right',
+  },
+  gridPageContainer: {
+    flex: 1,
+    padding: 24,
+    paddingBottom: 16,
+    backgroundColor: '#FFFFFF',
+  },
+  gridContent: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#000',
-    borderRadius: 12,
-    paddingVertical: 14,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+    marginHorizontal: -5,
   },
-  primaryButtonText: {
-    fontSize: 13,
+  gridContentCentered: { justifyContent: 'center', alignItems: 'center' },
+  gridItem: {
+    width: '33.33%',
+    padding: 5,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  gridItemSingle: { width: '80%', transform: [{ scale: 1.2 }] },
+  gridItemImage: { width: '100%', height: 110, marginBottom: 12 },
+  gridItemName: {
+    fontSize: 10,
     fontWeight: '700',
-    color: '#FFF',
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  gridItemCode: { fontSize: 8, textAlign: 'center', marginBottom: 6 },
+  gridItemDivider: {
+    width: 30,
+    height: 1,
+    backgroundColor: '#E0E0E0',
+    marginBottom: 6,
+  },
+  gridItemPrice: {
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  gridItemDots: { flexDirection: 'row', gap: 3 },
+  dot: { width: 3, height: 3, borderRadius: 1.5, opacity: 0.5 },
+  gridPageFooter: {
+    alignItems: 'center',
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F2',
+  },
+  gridFooterText: { fontSize: 8, letterSpacing: 0.5 },
+  downloadFab: {
+    position: 'absolute',
+    bottom: 120,
+    right: 24,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: THEME.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: THEME.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 8,
+    zIndex: 999,
+  },
+  downloadProgress: {
+    position: 'absolute',
+    bottom: 190,
+    right: 24,
+    backgroundColor: THEME.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    zIndex: 998,
+  },
+  downloadProgressText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: THEME.textDark,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F9F9FB',
-    padding: 20,
+    backgroundColor: THEME.background,
+    padding: 24,
   },
   errorText: {
     fontSize: 16,
-    color: '#555',
+    color: THEME.textMuted,
     fontWeight: '600',
-    marginTop: 15,
-    marginBottom: 20,
+    marginTop: 16,
+    marginBottom: 24,
     textAlign: 'center',
   },
   errorButton: {
-    backgroundColor: '#000',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
+    backgroundColor: THEME.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 16,
   },
   errorButtonText: {
-    color: '#FFF',
-    fontSize: 14,
+    color: THEME.surface,
+    fontSize: 15,
     fontWeight: '700',
   },
 });

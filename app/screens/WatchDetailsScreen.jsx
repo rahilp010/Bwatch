@@ -10,14 +10,28 @@ import {
   SafeAreaView,
   StatusBar,
   Alert,
+  Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import Toast from 'react-native-toast-message';
 import { useApp } from '../context/AppContext';
 
+const { width } = Dimensions.get('window');
+
+// --- THEME CONSTANTS MATCHING DESIGN SYSTEM ---
+const THEME = {
+  background: '#FAFAFA',
+  surface: '#FFFFFF',
+  primary: '#000000ff',
+  textDark: '#232F2C',
+  textMuted: '#7E918C',
+  imageBg: '#E0EAE8',
+};
+
 const WatchDetailsScreen = () => {
-  const { params, watches, deleteWatch, toggleFavorite, goBack, navigate } = useApp();
-  
+  const { params, watches, deleteWatch, toggleFavorite, goBack, navigate } =
+    useApp();
+
   // Find current watch from global state
   const watchId = params?.watchId;
   const watch = watches.find(w => w.id === watchId);
@@ -65,7 +79,7 @@ const WatchDetailsScreen = () => {
   if (!watch) {
     return (
       <SafeAreaView style={styles.errorContainer}>
-        <Icon name="alert-triangle" size={48} color="#FF9800" />
+        <Icon name="alert-triangle" size={48} color={THEME.textMuted} />
         <Text style={styles.errorText}>Watch details could not be loaded.</Text>
         <TouchableOpacity style={styles.errorButton} onPress={() => goBack()}>
           <Text style={styles.errorButtonText}>Go Back</Text>
@@ -80,8 +94,8 @@ const WatchDetailsScreen = () => {
       `Are you sure you want to remove the ${watch.brand} ${watch.name} from your collection?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
+        {
+          text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             await deleteWatch(watch.id);
@@ -91,28 +105,33 @@ const WatchDetailsScreen = () => {
               text2: 'Timepiece removed from collection.',
             });
             navigate('Dashboard');
-          }
-        }
-      ]
+          },
+        },
+      ],
     );
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F9F9FB" />
+      <StatusBar barStyle="dark-content" backgroundColor={THEME.background} />
 
-      {/* HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.headerIcon} onPress={() => goBack()}>
-          <Icon name="arrow-left" size={22} color="#000" />
+      {/* HEADER MATCHING DASHBOARD */}
+      <View style={styles.headerRow}>
+        <TouchableOpacity style={styles.iconButton} onPress={() => goBack()}>
+          <Icon name="arrow-left" size={20} color={THEME.textDark} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>B-WATCH</Text>
-        <TouchableOpacity style={styles.headerIcon} onPress={() => toggleFavorite(watch.id)}>
-          <Icon 
-            name={watch.isFavorite ? 'heart' : 'heart'} 
-            size={22} 
-            color={watch.isFavorite ? '#E53935' : '#000'} 
-            style={watch.isFavorite && { fill: '#E53935' }}
+
+        <Text style={styles.logoText}>B-WATCH</Text>
+
+        <TouchableOpacity
+          style={styles.iconButton}
+          onPress={() => toggleFavorite(watch.id)}
+        >
+          <Icon
+            name={watch.isFavorite ? 'heart' : 'heart'}
+            size={20}
+            color={watch.isFavorite ? '#E74C3C' : THEME.textDark}
+            style={watch.isFavorite && { fill: '#E74C3C' }}
           />
         </TouchableOpacity>
       </View>
@@ -131,9 +150,6 @@ const WatchDetailsScreen = () => {
             },
           ]}
         >
-          <View style={styles.stockBadge}>
-            <Text style={styles.stockText}>IN STOCK</Text>
-          </View>
           <Image
             source={{ uri: watch.image }}
             style={styles.watchImage}
@@ -155,7 +171,11 @@ const WatchDetailsScreen = () => {
           <View style={styles.titleRow}>
             <Text style={styles.mainTitle}>{watch.name}</Text>
             <Text style={styles.price}>
-              {watch.price ? `$${parseFloat(watch.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : 'N/A'}
+              {watch.price
+                ? `₹${parseFloat(watch.price).toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                  })}`
+                : 'N/A'}
             </Text>
           </View>
         </Animated.View>
@@ -195,7 +215,9 @@ const WatchDetailsScreen = () => {
               <Text style={styles.specLabel}>COLOR</Text>
               <View style={styles.colorWrapper}>
                 <View style={styles.colorDot} />
-                <Text style={styles.specValue}>{watch.color || 'Silver Dial'}</Text>
+                <Text style={styles.specValue}>
+                  {watch.color || 'Silver Dial'}
+                </Text>
               </View>
             </View>
           </View>
@@ -212,48 +234,56 @@ const WatchDetailsScreen = () => {
           ]}
         >
           <Text style={styles.sectionHeading}>PROFESSIONAL DESCRIPTION</Text>
-          <Text style={styles.descText}>
-            {watch.description}
-          </Text>
+          <Text style={styles.descText}>{watch.description}</Text>
 
           {/* FEATURE BADGES */}
           <View style={styles.featuresRow}>
             <View style={styles.featureBox}>
-              <Icon name="droplet" size={20} color="#000" />
+              <Icon name="droplet" size={20} color={THEME.textDark} />
               <Text style={styles.featureText}>100m Water</Text>
             </View>
             <View style={styles.featureBox}>
-              <Icon name="clock" size={20} color="#000" />
+              <Icon name="clock" size={20} color={THEME.textDark} />
               <Text style={styles.featureText}>48h Power</Text>
             </View>
             <View style={styles.featureBox}>
-              <Icon name="settings" size={20} color="#000" />
+              <Icon name="settings" size={20} color={THEME.textDark} />
               <Text style={styles.featureText}>40mm Case</Text>
             </View>
           </View>
         </Animated.View>
 
         {/* Space for absolute bottom actions and global bottom dock */}
-        <View style={{ height: 160 }} />
+        <View style={{ height: 180 }} />
       </ScrollView>
 
-      {/* BOTTOM ACTION BAR */}
+      {/* FLOATING BOTTOM ACTION BAR (LOCAL DOCK) */}
       <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.iconButton} onPress={handleDelete}>
-          <Icon name="trash-2" size={20} color="#E53935" />
+        <TouchableOpacity
+          style={styles.deleteIconButton}
+          onPress={handleDelete}
+        >
+          <Icon name="trash-2" size={20} color="#E74C3C" />
         </TouchableOpacity>
-        
-        <TouchableOpacity 
+
+        <TouchableOpacity
+          style={styles.editIconButton}
+          onPress={() => navigate('AddWatch', { watchId: watch.id })}
+        >
+          <Icon name="edit" size={20} color={THEME.primary} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={styles.primaryButton}
           onPress={() => navigate('CatalogueBuilder', { watchId: watch.id })}
         >
           <Icon
-            name="edit"
+            name="book-open"
             size={18}
-            color="#FFF"
+            color={THEME.surface}
             style={styles.btnIcon}
           />
-          <Text style={styles.primaryButtonText}>Catalogue Builder</Text>
+          <Text style={styles.primaryButtonText}>Catalogue</Text>
         </TouchableOpacity>
       </View>
       <Toast />
@@ -261,70 +291,84 @@ const WatchDetailsScreen = () => {
   );
 };
 
-// --- STYLES ---
+// --- STYLES ALIGNED WITH DESIGN SYSTEM ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9F9FB', // Clean off-white background
+    backgroundColor: THEME.background,
   },
-  header: {
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 10,
   },
-  headerTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#000',
-    letterSpacing: 1.5,
+  logoText: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: THEME.textDark,
+    letterSpacing: 1.2,
   },
-  headerIcon: {
-    padding: 6,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-  },
-  imageContainer: {
-    backgroundColor: '#F0F0F2', // Soft grey for the product stage
-    borderRadius: 16,
-    height: 260,
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: THEME.surface,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  scrollContent: {
+    paddingHorizontal: 24,
+    paddingBottom: 40,
+    paddingTop: 12,
+  },
+  imageContainer: {
+    backgroundColor: THEME.imageBg,
+    borderRadius: 24,
+    height: 300,
+    justifyContent: 'center',
+    alignItems: 'center',
     overflow: 'hidden',
     position: 'relative',
   },
   stockBadge: {
     position: 'absolute',
-    top: 15,
-    right: 15,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    top: 16,
+    right: 16,
+    backgroundColor: THEME.surface,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
     zIndex: 10,
   },
   stockText: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#333',
-    letterSpacing: 0.5,
+    fontWeight: '800',
+    color: THEME.textDark,
+    letterSpacing: 1,
   },
   watchImage: {
-    width: '90%',
-    height: '80%',
+    width: '100%',
+    height: '100%',
   },
   titleSection: {
-    marginTop: 25,
+    marginTop: 24,
   },
   brandSubtitle: {
-    fontSize: 12,
-    color: '#888',
+    fontSize: 13,
+    color: THEME.textMuted,
     fontWeight: '700',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
@@ -336,23 +380,27 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   mainTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#000',
+    fontSize: 26,
+    fontWeight: '800',
+    color: THEME.textDark,
     flex: 1,
     marginRight: 10,
+    letterSpacing: -0.5,
   },
   price: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#000',
+    fontSize: 22,
+    fontWeight: '800',
+    color: THEME.textDark,
   },
   specsContainer: {
-    marginTop: 25,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
+    marginTop: 24,
+    borderRadius: 24,
+    backgroundColor: THEME.surface,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 3,
     overflow: 'hidden',
   },
   specRow: {
@@ -360,139 +408,158 @@ const styles = StyleSheet.create({
   },
   specItem: {
     flex: 1,
-    padding: 16,
+    padding: 20,
   },
   specItemBorderRight: {
     borderRightWidth: 1,
-    borderRightColor: '#E0E0E0',
+    borderRightColor: THEME.imageBg,
   },
   specItemBorderBottom: {
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: THEME.imageBg,
   },
   specLabel: {
-    fontSize: 10,
-    color: '#888',
-    fontWeight: '600',
-    letterSpacing: 0.5,
+    fontSize: 11,
+    color: THEME.textMuted,
+    fontWeight: '700',
+    letterSpacing: 1,
     marginBottom: 6,
   },
   specValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#000',
+    fontSize: 15,
+    fontWeight: '700',
+    color: THEME.textDark,
   },
   colorWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   colorDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#000', // Dot representation
-    marginRight: 6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: THEME.textDark,
+    marginRight: 8,
   },
   descSection: {
-    marginTop: 30,
+    marginTop: 32,
   },
   sectionHeading: {
-    fontSize: 11,
-    color: '#888',
+    fontSize: 12,
+    color: THEME.textMuted,
     fontWeight: '700',
-    letterSpacing: 1,
+    letterSpacing: 1.5,
     marginBottom: 12,
   },
   descText: {
-    fontSize: 14,
-    color: '#555',
-    lineHeight: 22,
+    fontSize: 15,
+    color: THEME.textDark,
+    lineHeight: 24,
     fontWeight: '400',
   },
   featuresRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 25,
+    marginTop: 24,
+    gap: 12,
   },
   featureBox: {
     flex: 1,
-    backgroundColor: '#EAEAEF',
-    borderRadius: 10,
-    padding: 12,
+    backgroundColor: THEME.imageBg,
+    borderRadius: 16,
+    padding: 16,
     alignItems: 'center',
-    marginHorizontal: 4,
   },
   featureText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#000',
-    marginTop: 8,
+    color: THEME.textDark,
+    marginTop: 10,
   },
+
+  /* Local Floating Action Bar (Dock) Styles */
   bottomBar: {
     position: 'absolute',
-    bottom: 95, // Positioned right above the global floating bottom nav
-    left: 20,
-    right: 20,
+    bottom: 105, // Elevated above the global App navigation dock
+    left: 24,
+    right: 24,
     flexDirection: 'row',
-    padding: 10,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    padding: 12,
+    backgroundColor: THEME.surface,
+    borderRadius: 24,
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 6,
     zIndex: 10,
   },
-  iconButton: {
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 12,
-    padding: 14,
+  deleteIconButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: '#FDEDED', // Soft red background for deletion action
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
-    backgroundColor: '#FFF',
+  },
+  editIconButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: THEME.imageBg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   primaryButton: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: THEME.primary,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
+    height: 52,
+    borderRadius: 16,
+    shadowColor: THEME.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   btnIcon: {
     marginRight: 8,
   },
   primaryButtonText: {
-    color: '#FFF',
-    fontSize: 14,
+    color: THEME.surface,
+    fontSize: 15,
     fontWeight: '700',
   },
+
+  /* Error State Styles */
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F9F9FB',
-    padding: 20,
+    backgroundColor: THEME.background,
+    padding: 24,
   },
   errorText: {
     fontSize: 16,
-    color: '#555',
+    color: THEME.textMuted,
     fontWeight: '600',
-    marginTop: 15,
-    marginBottom: 20,
+    marginTop: 16,
+    marginBottom: 24,
   },
   errorButton: {
-    backgroundColor: '#000',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
+    backgroundColor: THEME.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 16,
   },
   errorButtonText: {
-    color: '#FFF',
-    fontSize: 14,
+    color: THEME.surface,
+    fontSize: 15,
     fontWeight: '700',
   },
 });

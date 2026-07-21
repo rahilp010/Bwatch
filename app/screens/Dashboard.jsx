@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -10,48 +10,138 @@ import {
   SafeAreaView,
   StatusBar,
   Dimensions,
-  TextInput,
-  ActivityIndicator,
+  RefreshControl,
+  Modal,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import { useApp } from '../context/AppContext';
 
 const { width } = Dimensions.get('window');
-const CARD_WIDTH = width / 2 - 24; // 2 columns with padding
 
-const Dashboard = () => {
-  const { watches, loading, toggleFavorite, navigate, currentScreen } = useApp();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showSearch, setShowSearch] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+// --- THEME CONSTANTS ---
+const THEME = {
+  background: '#FAFAFA',
+  surface: '#FFFFFF',
+  primary: '#000000ff',
+  textDark: '#232F2C',
+  textMuted: '#7E918C',
+  imageBg: '#E0EAE8',
+};
 
-  // Filter watches based on active tab ('Favorites' screen vs 'Dashboard' screen) and search query/category
-  const isFavoritesScreen = currentScreen === 'Favorites';
-  
-  const filteredWatches = watches.filter((watch) => {
-    const matchesTab = isFavoritesScreen ? watch.isFavorite : true;
-    const matchesSearch =
-      watch.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      watch.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory =
-      selectedCategory === 'All' ||
-      (selectedCategory === 'Men' && watch.gender === 'Men') ||
-      (selectedCategory === 'Women' && watch.gender === 'Women') ||
-      (selectedCategory === 'Unisex' && watch.gender === 'Unisex');
-    
-    return matchesTab && matchesSearch && matchesCategory;
-  });
+const CATEGORIES = ['All', 'Men', 'Women', 'Unisex'];
 
-  // Staggered Animation Array
-  const animatedValues = useRef([]);
+// Skeleton Card component
+const SkeletonCard = ({ index }) => {
+  const isEven = index % 2 === 0;
+  const pulseAnim = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
-    // Re-create animations list when list changes
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 0.8,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0.3,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  }, [pulseAnim]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.cardContainer,
+        { marginTop: isEven ? 0 : 40, opacity: pulseAnim },
+      ]}
+    >
+      <View style={styles.cardImageWrapper}>
+        <View
+          style={[
+            styles.skeletonElement,
+            { width: '100%', height: '100%', borderRadius: 22 },
+          ]}
+        />
+      </View>
+      <View style={styles.cardInfo}>
+        <View
+          style={[
+            styles.skeletonElement,
+            { width: '80%', height: 16, borderRadius: 4, marginBottom: 8 },
+          ]}
+        />
+        <View
+          style={[
+            styles.skeletonElement,
+            { width: '50%', height: 12, borderRadius: 4, marginBottom: 8 },
+          ]}
+        />
+        <View
+          style={[
+            styles.skeletonElement,
+            { width: '40%', height: 14, borderRadius: 4 },
+          ]}
+        />
+      </View>
+    </Animated.View>
+  );
+};
+
+const Dashboard = () => {
+  const { watches, loading, refreshWatches, navigate } = useApp();
+
+  // States
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedWatches, setSelectedWatches] = useState([]);
+  const [sortBy, setSortBy] = useState('none');
+  const [showPdfModeModal, setShowPdfModeModal] = useState(false);
+
+  // Animation Values
+  const animatedValues = useRef([]);
+  const slideAnim = useRef(new Animated.Value(width)).current;
+  const modalAnim = useRef(new Animated.Value(0)).current;
+
+  // Swipe-to-refresh handler
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await refreshWatches();
+    setRefreshing(false);
+  };
+
+  // 1. Filter Logic
+  const filteredWatches = useMemo(() => {
+    let result = (watches || []).filter(watch => {
+      if (selectedCategory === 'All') return true;
+      if (selectedCategory === 'Men' && watch.gender === 'Men') return true;
+      if (selectedCategory === 'Women' && watch.gender === 'Women') return true;
+      if (selectedCategory === 'Unisex' && watch.gender === 'Unisex')
+        return true;
+      return false;
+    });
+
+    if (sortBy === 'price_asc') {
+      result = [...result].sort((a, b) => parseFloat(a.price || 0) - parseFloat(b.price || 0));
+    } else if (sortBy === 'price_desc') {
+      result = [...result].sort((a, b) => parseFloat(b.price || 0) - parseFloat(a.price || 0));
+    } else if (sortBy === 'brand_asc') {
+      result = [...result].sort((a, b) => (a.brand || '').localeCompare(b.brand || ''));
+    }
+
+    return result;
+  }, [watches, selectedCategory, sortBy]);
+
+  // 2. Entrance Animation for Grid Items
+  useEffect(() => {
     animatedValues.current = filteredWatches.map(() => new Animated.Value(0));
 
-    const animations = animatedValues.current.map((anim) => {
+    const animations = animatedValues.current.map(anim => {
       return Animated.timing(anim, {
         toValue: 1,
         duration: 500,
@@ -60,197 +150,451 @@ const Dashboard = () => {
     });
 
     Animated.stagger(80, animations).start();
-  }, [filteredWatches.length, currentScreen]);
+  }, [filteredWatches, selectedCategory]);
 
-  // Extract unique categories/genders
-  const categories = ['All', 'Men', 'Women', 'Unisex'];
+  // 3. Side Panel Toggle Animation
+  const toggleFilter = open => {
+    setIsFilterOpen(open);
+    Animated.timing(slideAnim, {
+      toValue: open ? 0 : width,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  // 4. Selection Mode Toggle
+  const toggleSelectionMode = () => {
+    setIsSelectionMode(!isSelectionMode);
+    setSelectedWatches([]);
+  };
+
+  // 5. Toggle Watch Selection
+  const toggleWatchSelection = watchId => {
+    setSelectedWatches(prev => {
+      if (prev.includes(watchId)) {
+        return prev.filter(id => id !== watchId);
+      } else {
+        return [...prev, watchId];
+      }
+    });
+  };
+
+  // 6. Handle Generate Catalog
+  const handleGenerateCatalog = () => {
+    if (selectedWatches.length === 0) return;
+    // If only 1 watch selected, go directly to CatalogueBuilder
+    if (selectedWatches.length === 1) {
+      navigate('CatalogueBuilder', { selectedWatchIds: selectedWatches, pdfMode: 'single' });
+      setIsSelectionMode(false);
+      setSelectedWatches([]);
+      return;
+    }
+    // If multiple watches selected, show PDF mode selection modal
+    setShowPdfModeModal(true);
+  };
+
+  const handlePdfModeSelect = (mode) => {
+    setShowPdfModeModal(false);
+    navigate('CatalogueBuilder', { selectedWatchIds: selectedWatches, pdfMode: mode });
+    setIsSelectionMode(false);
+    setSelectedWatches([]);
+  };
+
+  // Modal Animation - only animate in, let React Native Modal handle fade out
+  useEffect(() => {
+    if (showPdfModeModal) {
+      modalAnim.setValue(0);
+      Animated.spring(modalAnim, {
+        toValue: 1,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [showPdfModeModal]);
+
+  // Card Render Function
+  const renderCard = (item, index) => {
+    const anim = animatedValues.current[index] || new Animated.Value(1);
+    const isSelected = selectedWatches.includes(item.id);
+    const isEven = index % 2 === 0;
+
+    const translateY = anim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [30, 0],
+    });
+
+    return (
+      <Animated.View
+        key={item.id}
+        style={[
+          styles.cardContainer,
+          { marginTop: isEven ? 0 : 40 },
+          { opacity: anim, transform: [{ translateY }] },
+        ]}
+      >
+        <TouchableOpacity
+          style={styles.cardTouchable}
+          activeOpacity={0.8}
+          onPress={() => {
+            if (isSelectionMode) toggleWatchSelection(item.id);
+            else navigate('WatchDetails', { watchId: item.id });
+          }}
+          onLongPress={() => {
+            if (!isSelectionMode) {
+              setIsSelectionMode(true);
+              setSelectedWatches([item.id]);
+            }
+          }}
+          delayLongPress={300}
+        >
+          {/* Card Image */}
+          <View
+            style={[
+              styles.cardImageWrapper,
+              isSelectionMode && isSelected && styles.cardImageWrapperSelected,
+            ]}
+          >
+            <Image
+              source={{ uri: item.image }}
+              style={styles.cardImage}
+              resizeMode="cover"
+            />
+            <View
+              style={[
+                styles.actionButton,
+                isSelected && styles.actionButtonSelected,
+              ]}
+            >
+              {isSelectionMode ? (
+                <Icon
+                  name="check"
+                  size={18}
+                  color={isSelected ? THEME.surface : THEME.primary}
+                />
+              ) : (
+                <Icon name="shopping-bag" size={16} color={THEME.surface} />
+              )}
+            </View>
+          </View>
+
+          {/* Card Info */}
+          <View style={styles.cardInfo}>
+            <Text style={styles.cardTitle} numberOfLines={1}>
+              {item.name}
+            </Text>
+            <Text style={styles.cardSubtitle} numberOfLines={1}>
+              {item.brand}
+            </Text>
+            <Text style={styles.cardPrice}>
+              ₹{item.price ? parseFloat(item.price).toFixed(2) : '0.00'}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F8F8FA" />
+      <StatusBar barStyle="dark-content" backgroundColor={THEME.background} />
 
       {/* HEADER */}
-      <View style={styles.header}>
-        {showSearch ? (
-          <View style={styles.searchBarContainer}>
-            <Icon name="search" size={16} color="#666" style={{ marginRight: 8 }} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search brand or model..."
-              placeholderTextColor="#999"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoFocus
-            />
-            <TouchableOpacity onPress={() => { setShowSearch(false); setSearchQuery(''); }}>
-              <Icon name="x" size={18} color="#000" />
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <>
-            <Text style={styles.logoText}>B-WATCH</Text>
-            <View style={styles.headerActions}>
-              <TouchableOpacity style={styles.actionBtn} onPress={() => setShowSearch(true)}>
-                <Icon name="search" size={18} color="#000" />
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.settingsButton, showCategoryDropdown && styles.settingsButtonActive]}
-                onPress={() => setShowCategoryDropdown(!showCategoryDropdown)}
-              >
-                <Icon name="sliders" size={18} color={showCategoryDropdown ? '#FFF' : '#000'} />
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
-      </View>
+      <View style={styles.headerRow}>
+        <Text style={styles.logoText}>B-WATCH</Text>
 
-      {/* CATEGORY SELECTOR DROPDOWN */}
-      {showCategoryDropdown && (
-        <View style={styles.dropdownCard}>
-          <Text style={styles.dropdownTitle}>Filter by Gender</Text>
-          <View style={styles.categoryRow}>
-            {categories.map((cat) => (
+        <View style={styles.headerActions}>
+          {isSelectionMode ? (
+            <>
               <TouchableOpacity
-                key={cat}
-                style={[
-                  styles.categoryBadge,
-                  selectedCategory === cat && styles.categoryBadgeActive,
-                ]}
-                onPress={() => {
-                  setSelectedCategory(cat);
-                  setShowCategoryDropdown(false);
-                }}
+                style={styles.iconButton}
+                onPress={toggleSelectionMode}
               >
-                <Text
-                  style={[
-                    styles.categoryBadgeText,
-                    selectedCategory === cat && styles.categoryBadgeTextActive,
-                  ]}
-                >
-                  {cat}
-                </Text>
+                <Icon name="x" size={20} color={THEME.textDark} />
               </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      )}
-
-      {/* TITLE SECTION */}
-      <View style={styles.titleSection}>
-        <Text style={styles.mainTitle}>
-          {isFavoritesScreen ? 'Favorites' : 'Collection'}
-        </Text>
-        {selectedCategory !== 'All' && (
-          <View style={styles.activeFilterBadge}>
-            <Text style={styles.activeFilterText}>{selectedCategory}</Text>
-            <TouchableOpacity onPress={() => setSelectedCategory('All')}>
-              <Icon name="x" size={10} color="#666" style={{ marginLeft: 4 }} />
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-
-      {/* LOADING INDICATOR */}
-      {loading ? (
-        <View style={styles.loaderContainer}>
-          <ActivityIndicator size="large" color="#000" />
-        </View>
-      ) : filteredWatches.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Icon name="slash" size={48} color="#CCC" />
-          <Text style={styles.emptyText}>
-            {isFavoritesScreen
-              ? 'No favorite watches yet.'
-              : searchQuery !== ''
-              ? 'No watches match your search.'
-              : 'Your collection is empty.'}
-          </Text>
-          {!isFavoritesScreen && searchQuery === '' && (
-            <TouchableOpacity
-              style={styles.emptyAddBtn}
-              onPress={() => navigate('AddWatch')}
-            >
-              <Text style={styles.emptyAddBtnText}>Add a Timepiece</Text>
-            </TouchableOpacity>
+              {selectedWatches.length > 0 && (
+                <TouchableOpacity
+                  style={[
+                    styles.iconButton,
+                    { backgroundColor: THEME.primary },
+                  ]}
+                  onPress={handleGenerateCatalog}
+                >
+                  <Icon name="file-text" size={18} color={THEME.surface} />
+                </TouchableOpacity>
+              )}
+            </>
+          ) : (
+            <>
+              <TouchableOpacity
+                style={styles.iconButton}
+                onPress={toggleSelectionMode}
+              >
+                <Icon name="check-square" size={18} color={THEME.textDark} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.iconButton}
+                onPress={() => toggleFilter(true)}
+              >
+                <Icon name="menu" size={20} color={THEME.textDark} />
+              </TouchableOpacity>
+            </>
           )}
         </View>
-      ) : (
-        /* WATCH GRID */
-        <ScrollView
-          contentContainerStyle={styles.gridContainer}
-          showsVerticalScrollIndicator={false}
-        >
-          {filteredWatches.map((item, index) => {
-            const anim = animatedValues.current[index] || new Animated.Value(1);
-            const translateY = anim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [30, 0],
-            });
+      </View>
 
-            return (
-              <Animated.View
-                key={item.id}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[THEME.primary]}
+            tintColor={THEME.primary}
+          />
+        }
+      >
+        {/* HERO SECTION */}
+        <View style={styles.heroSection}>
+          <Text style={styles.heroText}>Collections</Text>
+          {isSelectionMode && (
+            <Text style={styles.selectText}>
+              {selectedWatches.length} Selected
+            </Text>
+          )}
+        </View>
+
+        {/* QUICK CATEGORY PILLS */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryScroll}
+        >
+          {CATEGORIES.map(cat => (
+            <TouchableOpacity
+              key={cat}
+              style={[
+                styles.categoryPill,
+                selectedCategory === cat && styles.categoryPillActive,
+              ]}
+              onPress={() => setSelectedCategory(cat)}
+              activeOpacity={0.8}
+            >
+              <Text
                 style={[
-                  styles.cardContainer,
-                  {
-                    opacity: anim,
-                    transform: [{ translateY }],
-                  },
+                  styles.categoryPillText,
+                  selectedCategory === cat && styles.categoryPillTextActive,
                 ]}
               >
-                {/* Favorite Icon */}
-                <TouchableOpacity
-                  style={styles.favoriteIcon}
-                  onPress={() => toggleFavorite(item.id)}
-                  activeOpacity={0.7}
-                >
-                  <FontAwesome
-                    name={item.isFavorite ? 'heart' : 'heart-o'}
-                    size={16}
-                    color={item.isFavorite ? '#E53935' : '#666'}
-                  />
-                </TouchableOpacity>
-
-                {/* Watch Image */}
-                <TouchableOpacity
-                  style={styles.imageWrapper}
-                  onPress={() => navigate('WatchDetails', { watchId: item.id })}
-                  activeOpacity={0.9}
-                >
-                  <Image
-                    source={{ uri: item.image }}
-                    style={styles.watchImage}
-                    resizeMode="cover"
-                  />
-                </TouchableOpacity>
-
-                {/* Watch Details */}
-                <TouchableOpacity
-                  style={styles.cardInfo}
-                  onPress={() => navigate('WatchDetails', { watchId: item.id })}
-                  activeOpacity={0.9}
-                >
-                  <Text style={styles.brandText} numberOfLines={1}>{item.brand}</Text>
-                  <Text style={styles.nameText} numberOfLines={2}>{item.name}</Text>
-
-                  <View style={styles.footerRow}>
-                    <Text style={styles.priceText}>
-                      {item.price ? `$${parseFloat(item.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : 'N/A'}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => navigate('CatalogueBuilder', { watchId: item.id })}
-                    >
-                      <Text style={styles.buyNowText}>Build</Text>
-                    </TouchableOpacity>
-                  </View>
-                </TouchableOpacity>
-              </Animated.View>
-            );
-          })}
-          {/* Padding for bottom nav */}
-          <View style={{ height: 120 }} />
+                {cat}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </ScrollView>
+
+        {/* BEST PICKS LIST */}
+        <View style={styles.listSection}>
+          {loading && !refreshing ? (
+            <View style={styles.listContainer}>
+              {Array.from({ length: 6 }).map((_, idx) => (
+                <SkeletonCard key={idx} index={idx} />
+              ))}
+            </View>
+          ) : filteredWatches.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Icon name="watch" size={48} color={THEME.textMuted} />
+              <Text style={styles.emptyText}>No watches found.</Text>
+            </View>
+          ) : (
+            <View style={styles.listContainer}>
+              {filteredWatches.map((watch, index) => renderCard(watch, index))}
+            </View>
+          )}
+        </View>
+      </ScrollView>
+
+      {/* RIGHT PANEL OVERLAY */}
+      {isFilterOpen && (
+        <TouchableOpacity
+          style={styles.overlay}
+          activeOpacity={1}
+          onPress={() => toggleFilter(false)}
+        />
       )}
+
+      {/* SLIDING RIGHT PANEL (FILTERS) */}
+      <Animated.View
+        style={[styles.rightPanel, { transform: [{ translateX: slideAnim }] }]}
+      >
+        <View style={styles.panelHeader}>
+          <Text style={styles.panelTitle}>Filters</Text>
+          <TouchableOpacity
+            onPress={() => toggleFilter(false)}
+            style={styles.closeBtn}
+          >
+            <Icon name="x" size={24} color={THEME.textDark} />
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.filterSectionTitle}>SORT BY PRICE</Text>
+
+        <TouchableOpacity
+          style={[
+            styles.filterOption,
+            sortBy === 'price_asc' && styles.filterOptionActive,
+          ]}
+          onPress={() => {
+            setSortBy(sortBy === 'price_asc' ? 'none' : 'price_asc');
+            toggleFilter(false);
+          }}
+        >
+          <Text
+            style={[
+              styles.filterOptionText,
+              sortBy === 'price_asc' && styles.filterOptionTextActive,
+            ]}
+          >
+            Price: Low to High
+          </Text>
+          {sortBy === 'price_asc' && (
+            <Icon name="check" size={18} color={THEME.surface} />
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.filterOption,
+            sortBy === 'price_desc' && styles.filterOptionActive,
+          ]}
+          onPress={() => {
+            setSortBy(sortBy === 'price_desc' ? 'none' : 'price_desc');
+            toggleFilter(false);
+          }}
+        >
+          <Text
+            style={[
+              styles.filterOptionText,
+              sortBy === 'price_desc' && styles.filterOptionTextActive,
+            ]}
+          >
+            Price: High to Low
+          </Text>
+          {sortBy === 'price_desc' && (
+            <Icon name="check" size={18} color={THEME.surface} />
+          )}
+        </TouchableOpacity>
+
+        <Text style={[styles.filterSectionTitle, { marginTop: 24 }]}>SORT BY BRAND</Text>
+
+        <TouchableOpacity
+          style={[
+            styles.filterOption,
+            sortBy === 'brand_asc' && styles.filterOptionActive,
+          ]}
+          onPress={() => {
+            setSortBy(sortBy === 'brand_asc' ? 'none' : 'brand_asc');
+            toggleFilter(false);
+          }}
+        >
+          <Text
+            style={[
+              styles.filterOptionText,
+              sortBy === 'brand_asc' && styles.filterOptionTextActive,
+            ]}
+          >
+            Brand Name (A-Z)
+          </Text>
+          {sortBy === 'brand_asc' && (
+            <Icon name="check" size={18} color={THEME.surface} />
+          )}
+        </TouchableOpacity>
+      </Animated.View>
+
+      {/* PDF MODE SELECTION MODAL */}
+      <Modal
+        visible={showPdfModeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPdfModeModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Animated.View 
+            style={[
+              styles.modalContainer,
+              {
+                opacity: modalAnim,
+                transform: [
+                  {
+                    scale: modalAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.9, 1],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <View style={styles.modalIconContainer}>
+                <Icon name="file-text" size={28} color={THEME.surface} />
+              </View>
+              <Text style={styles.modalTitle}>PDF Export Mode</Text>
+              <Text style={styles.modalSubtitle}>
+                {selectedWatches.length} watches selected
+              </Text>
+            </View>
+
+            <Text style={styles.modalDescription}>
+              Choose how you want to generate the PDF catalogue:
+            </Text>
+
+            {/* Single PDF Option */}
+            <TouchableOpacity
+              style={styles.modalOption}
+              onPress={() => handlePdfModeSelect('single')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.modalOptionIconContainer}>
+                <Icon name="file" size={24} color={THEME.primary} />
+              </View>
+              <View style={styles.modalOptionContent}>
+                <Text style={styles.modalOptionTitle}>Same PDF</Text>
+                <Text style={styles.modalOptionDesc}>
+                  Combine all watches in one catalogue
+                </Text>
+              </View>
+              <Icon name="chevron-right" size={20} color={THEME.textMuted} />
+            </TouchableOpacity>
+
+            {/* Separate PDFs Option */}
+            <TouchableOpacity
+              style={styles.modalOption}
+              onPress={() => handlePdfModeSelect('separate')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.modalOptionIconContainer}>
+                <Icon name="copy" size={24} color={THEME.primary} />
+              </View>
+              <View style={styles.modalOptionContent}>
+                <Text style={styles.modalOptionTitle}>Separate PDFs</Text>
+                <Text style={styles.modalOptionDesc}>
+                  Create individual PDF for each watch
+                </Text>
+              </View>
+              <Icon name="chevron-right" size={20} color={THEME.textMuted} />
+            </TouchableOpacity>
+
+            {/* Cancel Button */}
+            <TouchableOpacity
+              style={styles.modalCancelButton}
+              onPress={() => setShowPdfModeModal(false)}
+            >
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -259,233 +603,341 @@ const Dashboard = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F8FA', // Soft off-white premium background
+    backgroundColor: THEME.background,
   },
-  header: {
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    height: 50,
-    marginBottom: 10,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 20,
+  },
+  logoText: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: THEME.textDark,
+    letterSpacing: 1.2,
   },
   headerActions: {
     flexDirection: 'row',
+    gap: 12,
+  },
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: THEME.surface,
+    justifyContent: 'center',
     alignItems: 'center',
-  },
-  actionBtn: {
-    padding: 8,
-    marginRight: 8,
-  },
-  logoText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#000',
-    letterSpacing: 1.5,
-  },
-  settingsButton: {
-    padding: 6,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 8,
-    backgroundColor: '#FFF',
-  },
-  settingsButtonActive: {
-    backgroundColor: '#000',
-    borderColor: '#000',
-  },
-  searchBarContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    paddingHorizontal: 12,
-    height: 40,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: '#000',
-    paddingVertical: 0,
-  },
-  dropdownCard: {
-    backgroundColor: '#FFF',
-    marginHorizontal: 20,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#EAEAEA',
-    marginBottom: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.06,
     shadowRadius: 10,
     elevation: 3,
   },
-  dropdownTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#666',
-    letterSpacing: 0.5,
-    marginBottom: 10,
-    textTransform: 'uppercase',
+  scrollContent: {
+    paddingBottom: 120,
   },
-  categoryRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+  heroSection: {
+    paddingHorizontal: 24,
+    marginBottom: 24,
   },
-  categoryBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#F0F0F2',
-  },
-  categoryBadgeActive: {
-    backgroundColor: '#000',
-  },
-  categoryBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
-  },
-  categoryBadgeTextActive: {
-    color: '#FFF',
-  },
-  titleSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 15,
-  },
-  mainTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#000',
+  heroText: {
+    fontSize: 32,
+    fontWeight: '400',
+    color: THEME.textDark,
+    alignSelf: 'flex-start',
     letterSpacing: -0.5,
   },
-  activeFilterBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EAEAEA',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+  selectText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: THEME.primary,
+    marginTop: 8,
   },
-  activeFilterText: {
-    fontSize: 10,
+  categoryScroll: {
+    paddingHorizontal: 24,
+    gap: 12,
+    marginBottom: 36,
+  },
+  categoryPill: {
+    backgroundColor: THEME.surface,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+    marginRight: 1,
+  },
+  categoryPillActive: {
+    backgroundColor: THEME.primary,
+  },
+  categoryPillText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: THEME.textMuted,
+  },
+  categoryPillTextActive: {
+    color: THEME.surface,
     fontWeight: '600',
-    color: '#555',
   },
-  gridContainer: {
+  listSection: {
+    paddingHorizontal: 24,
+  },
+  listContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 20,
   },
   cardContainer: {
-    width: CARD_WIDTH,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 3,
+    width: '47%',
+    marginBottom: 32,
   },
-  favoriteIcon: {
-    alignSelf: 'flex-end',
-    padding: 4,
-    zIndex: 10,
+  cardTouchable: {
+    flexDirection: 'column',
+    width: '100%',
   },
-  imageWrapper: {
-    alignItems: 'center',
+  cardImageWrapper: {
+    width: '100%',
+    aspectRatio: 0.82,
+    borderRadius: 24,
+    backgroundColor: THEME.imageBg,
     justifyContent: 'center',
-    height: 120,
-    marginVertical: 10,
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: '#F0F0F2',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
-  watchImage: {
+  cardImageWrapperSelected: {
+    borderColor: THEME.primary,
+  },
+  cardImage: {
     width: '100%',
     height: '100%',
+    borderRadius: 22,
   },
   cardInfo: {
-    marginTop: 5,
+    paddingHorizontal: 4,
+    width: '100%',
   },
-  brandText: {
-    fontSize: 10,
-    color: '#888',
-    marginBottom: 2,
+  cardTitle: {
+    fontSize: 16,
     fontWeight: '700',
-    textTransform: 'uppercase',
+    color: THEME.textDark,
+    marginBottom: 4,
   },
-  nameText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#000',
-    lineHeight: 18,
-    height: 36, // Fits 2 lines
+  cardSubtitle: {
+    fontSize: 13,
+    color: THEME.textMuted,
+    marginBottom: 8,
   },
-  footerRow: {
+  cardPrice: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: THEME.textDark,
+  },
+  actionButton: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: THEME.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  actionButtonSelected: {
+    backgroundColor: THEME.primary,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 60,
+  },
+  emptyText: {
+    marginTop: 16,
+    color: THEME.textMuted,
+    fontSize: 16,
+  },
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    zIndex: 99,
+  },
+  rightPanel: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    right: 0,
+    width: width * 0.75,
+    backgroundColor: THEME.surface,
+    zIndex: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: -10, height: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 20,
+    paddingTop: 60,
+    paddingHorizontal: 24,
+  },
+  panelHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 12,
+    marginBottom: 40,
   },
-  priceText: {
-    fontSize: 12,
-    color: '#333',
-    fontWeight: '600',
+  panelTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: THEME.textDark,
   },
-  buyNowText: {
-    fontSize: 12,
-    color: '#000',
+  closeBtn: {
+    padding: 8,
+    marginRight: -8,
+  },
+  filterSectionTitle: {
+    fontSize: 13,
     fontWeight: '700',
-    borderWidth: 1,
-    borderColor: '#000',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
+    color: THEME.textMuted,
+    letterSpacing: 1.5,
+    marginBottom: 16,
   },
-  loaderContainer: {
+  filterOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    borderRadius: 16,
+    backgroundColor: THEME.background,
+    marginBottom: 12,
+  },
+  filterOptionActive: {
+    backgroundColor: THEME.primary,
+  },
+  filterOptionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: THEME.textDark,
+  },
+  filterOptionTextActive: {
+    color: THEME.surface,
+  },
+  skeletonElement: {
+    backgroundColor: '#EAEAEA',
+  },
+  // Modal Styles
+  modalOverlay: {
     flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 24,
   },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  modalContainer: {
+    backgroundColor: THEME.surface,
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    maxWidth: 380,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalHeader: {
     alignItems: 'center',
-    paddingHorizontal: 40,
-    marginTop: 50,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    marginTop: 12,
     marginBottom: 20,
   },
-  emptyAddBtn: {
-    backgroundColor: '#000',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
+  modalIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: THEME.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
   },
-  emptyAddBtnText: {
-    color: '#FFF',
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: THEME.textDark,
+    marginBottom: 4,
+  },
+  modalSubtitle: {
     fontSize: 14,
+    fontWeight: '500',
+    color: THEME.textMuted,
+  },
+  modalDescription: {
+    fontSize: 14,
+    color: THEME.textMuted,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: THEME.background,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  modalOptionIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: THEME.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  modalOptionContent: {
+    flex: 1,
+  },
+  modalOptionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: THEME.textDark,
+    marginBottom: 2,
+  },
+  modalOptionDesc: {
+    fontSize: 13,
+    color: THEME.textMuted,
+  },
+  modalCancelButton: {
+    marginTop: 8,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderRadius: 12,
+  },
+  modalCancelText: {
+    fontSize: 16,
     fontWeight: '600',
+    color: THEME.textMuted,
   },
 });
 

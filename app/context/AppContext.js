@@ -11,17 +11,19 @@ import { isConfigured } from '../supabase/client';
 
 const AppContext = createContext();
 
-export const AppProvider = ({ children, navigationRef }) => {
+export const AppProvider = ({ children, navigationRef: propNavigationRef }) => {
   // --- Navigation State (Custom navigation for Stack Navigator control) ---
-  const [currentScreen, setCurrentScreen] = useState('Dashboard');
+  const [currentScreen, setCurrentScreen] = useState('PremiumWatch');
   const [params, setParams] = useState(null);
 
-  // Initialize navigation ref from prop
+  const navigationRef = React.useRef(null);
+
+  // Initialize navigation ref from prop if passed
   React.useEffect(() => {
-    if (navigationRef && navigationRef.current) {
-      setNavigationRef(navigationRef.current);
+    if (propNavigationRef && propNavigationRef.current) {
+      navigationRef.current = propNavigationRef.current;
     }
-  }, [navigationRef]);
+  }, [propNavigationRef]);
 
   const setNavigationRef = (ref) => {
     navigationRef.current = ref;
@@ -58,45 +60,46 @@ export const AppProvider = ({ children, navigationRef }) => {
   // Automatically use Supabase if configured, otherwise use local storage
   const [useSupabase, setUseSupabase] = useState(isConfigured);
 
-  useEffect(() => {
-    const initWatches = async () => {
-      setLoading(true);
-      try {
-        if (useSupabase && isConfigured) {
-          console.log('Fetching watches from Supabase...');
-          // Try to fetch from Supabase
-          const supabaseWatches = await getWatchesFromSupabase();
-          // Convert Supabase format to app format
-          const formattedWatches = supabaseWatches.map(w => ({
-            id: w.id,
-            brand: w.brand,
-            name: w.name,
-            price: w.price ? w.price.toString() : '',
-            description: w.description,
-            gender: w.gender,
-            strap: w.strap,
-            type: w.type,
-            color: w.color,
-            image: w.image,
-            isFavorite: w.is_favorite,
-          }));
-          setWatches(formattedWatches);
-          console.log('Successfully loaded watches from Supabase:', formattedWatches.length);
-        } else {
-          console.log('Using local storage for watches...');
-          // Use local storage
-          const stored = await getWatches();
-          setWatches(stored);
-        }
-      } catch (error) {
-        console.error('Error initializing watches:', error);
-        // Fallback to local storage on error
+  const refreshWatches = async () => {
+    setLoading(true);
+    try {
+      if (useSupabase && isConfigured) {
+        console.log('Fetching watches from Supabase...');
+        // Try to fetch from Supabase
+        const supabaseWatches = await getWatchesFromSupabase();
+        // Convert Supabase format to app format
+        const formattedWatches = supabaseWatches.map(w => ({
+          id: w.id,
+          brand: w.brand,
+          name: w.name,
+          price: w.price ? w.price.toString() : '',
+          description: w.description,
+          gender: w.gender,
+          strap: w.strap,
+          type: w.type,
+          color: w.color,
+          image: w.image,
+          isFavorite: w.is_favorite,
+        }));
+        setWatches(formattedWatches);
+        console.log('Successfully loaded watches from Supabase:', formattedWatches.length);
+      } else {
+        console.log('Using local storage for watches...');
+        // Use local storage
         const stored = await getWatches();
         setWatches(stored);
       }
-      setLoading(false);
-    };
-    initWatches();
+    } catch (error) {
+      console.error('Error initializing watches:', error);
+      // Fallback to local storage on error
+      const stored = await getWatches();
+      setWatches(stored);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    refreshWatches();
   }, [useSupabase, isConfigured]);
 
   const addWatch = async (newWatch) => {
@@ -221,14 +224,17 @@ export const AppProvider = ({ children, navigationRef }) => {
       value={{
         // Navigation
         currentScreen,
+        setCurrentScreen,
         params,
         navigate,
         goBack,
         resetTo,
         setNavigationRef,
+        navigationRef,
         // Watches
         watches,
         loading,
+        refreshWatches,
         addWatch,
         updateWatch,
         deleteWatch,

@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
   },
   imageContainer: {
-    height: height * 0.7,
+    height: '70%',
     width: '100%',
     position: 'absolute',
     top: 0,
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     width: '100%',
-    height: height * 0.4, // Gradual fade across the bottom half of the image
+    height: '40%', // Gradual fade across the bottom half of the image
   },
   contentContainer: {
     flex: 1,

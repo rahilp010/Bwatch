@@ -1,4 +1,5 @@
 import { supabase, TABLES, isConfigured } from './client';
+import RNFS from 'react-native-fs';
 
 /**
  * Watch Service - Handles all Supabase operations for watches
@@ -158,13 +159,58 @@ export const toggleWatchFavorite = async (id, currentStatus) => {
   }
 };
 
+// Helper to decode base64 to Uint8Array for React Native binary upload support
+const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+const lookup = new Uint8Array(256);
+for (let i = 0; i < chars.length; i++) {
+  lookup[chars.charCodeAt(i)] = i;
+}
+
+const decodeBase64 = (base64) => {
+  let bufferLength = base64.length * 0.75;
+  let len = base64.length;
+  let p = 0;
+  
+  if (base64[base64.length - 1] === '=') {
+    bufferLength--;
+    if (base64[base64.length - 2] === '=') {
+      bufferLength--;
+    }
+  }
+  
+  const arrayBuffer = new ArrayBuffer(bufferLength);
+  const bytes = new Uint8Array(arrayBuffer);
+  
+  for (let i = 0; i < len; i += 4) {
+    const encoded1 = lookup[base64.charCodeAt(i)];
+    const encoded2 = lookup[base64.charCodeAt(i + 1)];
+    const encoded3 = lookup[base64.charCodeAt(i + 2)];
+    const encoded4 = lookup[base64.charCodeAt(i + 3)];
+    
+    bytes[p++] = (encoded1 << 2) | (encoded2 >> 4);
+    if (p < bufferLength) bytes[p++] = ((encoded2 & 15) << 4) | (encoded3 >> 2);
+    if (p < bufferLength) bytes[p++] = ((encoded3 & 3) << 6) | (encoded4 & 63);
+  }
+  
+  return bytes;
+};
+
 // Upload image to Supabase Storage
-export const uploadWatchImage = async (file, fileName) => {
+export const uploadWatchImage = async (uri, fileName) => {
   try {
     checkSupabaseAvailable();
+
+    // Read the file from the local uri as base64
+    const path = uri.startsWith('file://') ? uri.replace('file://', '') : uri;
+    const base64Data = await RNFS.readFile(path, 'base64');
+    const binaryData = decodeBase64(base64Data);
+
     const { data, error } = await supabase.storage
       .from('watch-images')
-      .upload(fileName, file);
+      .upload(fileName, binaryData, {
+        contentType: 'image/jpeg',
+        upsert: true,
+      });
 
     if (error) throw error;
     
