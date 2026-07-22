@@ -15,8 +15,8 @@ import hero from '../assets/hero.png';
 
 const { width, height } = Dimensions.get('window');
 
+// Keep background dark to fit splash/image aesthetic, but match button/font styling to the system
 const PremiumWatchScreen = ({ navigation }) => {
-  // Animation Values
   const fadeAnimTitle = useRef(new Animated.Value(0)).current;
   const slideAnimTitle = useRef(new Animated.Value(40)).current;
 
@@ -27,7 +27,6 @@ const PremiumWatchScreen = ({ navigation }) => {
   const slideAnimButton = useRef(new Animated.Value(40)).current;
 
   useEffect(() => {
-    // Staggered animation for a premium mounting effect
     Animated.stagger(200, [
       Animated.parallel([
         Animated.timing(fadeAnimTitle, {
@@ -72,22 +71,18 @@ const PremiumWatchScreen = ({ navigation }) => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
 
-      {/* Background Image Setup */}
       <View style={styles.imageContainer}>
         <Image
-          // Replace with your exact local asset: require('./path/to/watch.png')
           source={hero}
           style={styles.backgroundImage}
           resizeMode="cover"
         />
-        {/* Gradient overlay to seamlessly blend the image into the black background */}
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.6)', '#000000']}
+          colors={['transparent', 'rgba(28,28,30,0.8)', '#1C1C1E']}
           style={styles.gradientOverlay}
         />
       </View>
 
-      {/* Content Overlay */}
       <View style={styles.contentContainer}>
         <View style={styles.textSection}>
           <Animated.View
@@ -96,8 +91,8 @@ const PremiumWatchScreen = ({ navigation }) => {
               transform: [{ translateY: slideAnimTitle }],
             }}
           >
-            <Text style={styles.titlePrimary}>Own a Piece</Text>
-            <Text style={styles.titleSecondary}>of Time</Text>
+            <Text style={styles.titlePrimary}>B-WATCH</Text>
+            <Text style={styles.titleSecondary}>Timepieces</Text>
           </Animated.View>
 
           <Animated.View
@@ -107,8 +102,8 @@ const PremiumWatchScreen = ({ navigation }) => {
             }}
           >
             <Text style={styles.subtitle}>
-              Discover and collect extraordinary watches{'\n'}
-              from the world's most prestigious brands.
+              Discover and collect extraordinary watches{'\n'}from the world's
+              most prestigious brands.
             </Text>
           </Animated.View>
         </View>
@@ -122,17 +117,16 @@ const PremiumWatchScreen = ({ navigation }) => {
             },
           ]}
         >
-          <TouchableOpacity 
-            style={styles.button} 
-            activeOpacity={0.8}
+          <TouchableOpacity
+            style={styles.button}
+            activeOpacity={0.9}
             onPress={() => navigation.navigate('Dashboard')}
           >
             <Text style={styles.buttonText}>Explore Timepieces</Text>
-            {/* Added subtle icon to fulfill the vector-icons requirement elegantly */}
             <Icon
               name="arrow-right"
               size={20}
-              color="#000000"
+              color="#1C1C1E"
               style={styles.buttonIcon}
             />
           </TouchableOpacity>
@@ -143,26 +137,19 @@ const PremiumWatchScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000000',
-  },
+  container: { flex: 1, backgroundColor: '#1C1C1E' },
   imageContainer: {
     height: '70%',
     width: '100%',
     position: 'absolute',
     top: 0,
   },
-  backgroundImage: {
-    width: '100%',
-    height: '100%',
-    opacity: 0.8, // Slightly dims the image to make text pop more
-  },
+  backgroundImage: { width: '100%', height: '100%', opacity: 0.8 },
   gradientOverlay: {
     position: 'absolute',
     bottom: 0,
     width: '100%',
-    height: '40%', // Gradual fade across the bottom half of the image
+    height: '50%',
   },
   contentContainer: {
     flex: 1,
@@ -170,55 +157,52 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 50,
   },
-  textSection: {
-    alignItems: 'center',
-    marginBottom: 40,
-  },
+  textSection: { alignItems: 'center', marginBottom: 40 },
   titlePrimary: {
-    fontSize: 36,
+    fontSize: 40,
     color: '#FFFFFF',
-    fontWeight: '700',
+    fontWeight: '400',
     textAlign: 'center',
-    letterSpacing: 0.5,
+    letterSpacing: -0.5,
   },
   titleSecondary: {
-    fontSize: 34,
-    color: '#A0A0A0', // Slightly dimmer to recreate the effect in the design
-    fontWeight: '300',
+    fontSize: 40,
+    color: '#F0FE67',
+    fontWeight: '400',
     textAlign: 'center',
     marginTop: -5,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#888888',
+    fontSize: 15,
+    color: '#8E8E93',
     textAlign: 'center',
-    marginTop: 20,
+    marginTop: 16,
     lineHeight: 22,
     fontWeight: '400',
   },
-  buttonWrapper: {
-    width: '100%',
-    alignItems: 'center',
-  },
+  buttonWrapper: { width: '100%', alignItems: 'center' },
   button: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F0FE67',
     width: '100%',
     paddingVertical: 18,
-    borderRadius: 30, // Fully rounded pill shape
+    borderRadius: 30,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#F0FE67',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 4,
   },
   buttonText: {
-    color: '#000000',
+    color: '#1C1C1E',
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: 0.3,
   },
-  buttonIcon: {
-    marginLeft: 10,
-    marginTop: 2,
-  },
+  buttonIcon: { marginLeft: 10, marginTop: 2 },
 });
 
 export default PremiumWatchScreen;

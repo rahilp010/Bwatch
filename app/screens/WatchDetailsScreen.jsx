@@ -20,23 +20,23 @@ const { width } = Dimensions.get('window');
 
 // --- THEME CONSTANTS MATCHING DESIGN SYSTEM ---
 const THEME = {
-  background: '#FAFAFA',
+  background: '#E6E6E6',
   surface: '#FFFFFF',
-  primary: '#000000ff',
-  textDark: '#232F2C',
-  textMuted: '#7E918C',
-  imageBg: '#E0EAE8',
+  primary: '#1C1C1E',
+  textDark: '#1C1C1E',
+  textLight: '#FFFFFF',
+  textMuted: '#8E8E93',
+  accentColor: '#F0FE67',
+  imageBg: '#FFFFFF',
 };
 
 const WatchDetailsScreen = () => {
   const { params, watches, deleteWatch, toggleFavorite, goBack, navigate } =
     useApp();
 
-  // Find current watch from global state
   const watchId = params?.watchId;
   const watch = watches.find(w => w.id === watchId);
 
-  // Setup Animated Values for staggered entrance
   const fadeAnimImage = useRef(new Animated.Value(0)).current;
   const slideAnimImage = useRef(new Animated.Value(30)).current;
 
@@ -52,7 +52,6 @@ const WatchDetailsScreen = () => {
   useEffect(() => {
     if (!watch) return;
 
-    // Premium staggered animation sequence
     const createAnimation = (fadeVal, slideVal) => {
       return Animated.parallel([
         Animated.timing(fadeVal, {
@@ -117,21 +116,24 @@ const WatchDetailsScreen = () => {
 
       {/* HEADER MATCHING DASHBOARD */}
       <View style={styles.headerRow}>
-        <TouchableOpacity style={styles.iconButton} onPress={() => goBack()}>
+        <TouchableOpacity
+          style={[styles.iconButton, { backgroundColor: THEME.surface }]}
+          onPress={() => goBack()}
+        >
           <Icon name="arrow-left" size={20} color={THEME.textDark} />
         </TouchableOpacity>
 
-        <Text style={styles.logoText}>B-WATCH</Text>
+        <Text style={styles.logoText}>Details</Text>
 
         <TouchableOpacity
-          style={styles.iconButton}
+          style={[styles.iconButton, { backgroundColor: THEME.primary }]}
           onPress={() => toggleFavorite(watch.id)}
         >
           <Icon
-            name={watch.isFavorite ? 'heart' : 'heart'}
+            name="heart"
             size={20}
-            color={watch.isFavorite ? '#E74C3C' : THEME.textDark}
-            style={watch.isFavorite && { fill: '#E74C3C' }}
+            color={watch.isFavorite ? THEME.accentColor : THEME.textLight}
+            style={watch.isFavorite && { fill: THEME.accentColor }}
           />
         </TouchableOpacity>
       </View>
@@ -150,11 +152,7 @@ const WatchDetailsScreen = () => {
             },
           ]}
         >
-          <Image
-            source={{ uri: watch.image }}
-            style={styles.watchImage}
-            resizeMode="contain"
-          />
+          <Image source={{ uri: watch.image }} style={styles.watchImage} />
         </Animated.View>
 
         {/* TITLE & PRICE SECTION */}
@@ -233,7 +231,7 @@ const WatchDetailsScreen = () => {
             },
           ]}
         >
-          <Text style={styles.sectionHeading}>PROFESSIONAL DESCRIPTION</Text>
+          <Text style={styles.sectionHeading}>Description</Text>
           <Text style={styles.descText}>{watch.description}</Text>
 
           {/* FEATURE BADGES */}
@@ -253,24 +251,23 @@ const WatchDetailsScreen = () => {
           </View>
         </Animated.View>
 
-        {/* Space for absolute bottom actions and global bottom dock */}
         <View style={{ height: 180 }} />
       </ScrollView>
 
-      {/* FLOATING BOTTOM ACTION BAR (LOCAL DOCK) */}
+      {/* FLOATING BOTTOM ACTION BAR */}
       <View style={styles.bottomBar}>
         <TouchableOpacity
-          style={styles.deleteIconButton}
+          style={styles.secondaryIconButton}
           onPress={handleDelete}
         >
           <Icon name="trash-2" size={20} color="#E74C3C" />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.editIconButton}
+          style={styles.secondaryIconButton}
           onPress={() => navigate('AddWatch', { watchId: watch.id })}
         >
-          <Icon name="edit" size={20} color={THEME.primary} />
+          <Icon name="edit" size={20} color={THEME.textDark} />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -280,7 +277,7 @@ const WatchDetailsScreen = () => {
           <Icon
             name="book-open"
             size={18}
-            color={THEME.surface}
+            color={THEME.textDark}
             style={styles.btnIcon}
           />
           <Text style={styles.primaryButtonText}>Catalogue</Text>
@@ -301,63 +298,45 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: 10,
   },
   logoText: {
-    fontSize: 22,
-    fontWeight: '800',
+    fontSize: 32,
+    fontWeight: '400',
     color: THEME.textDark,
-    letterSpacing: 1.2,
+    letterSpacing: -0.5,
   },
   iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: THEME.surface,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  scrollContent: {
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-    paddingTop: 12,
-  },
-  imageContainer: {
-    backgroundColor: THEME.imageBg,
-    borderRadius: 24,
-    height: 300,
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  stockBadge: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    backgroundColor: THEME.surface,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
-    zIndex: 10,
   },
-  stockText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: THEME.textDark,
-    letterSpacing: 1,
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+    paddingTop: 12,
+  },
+  imageContainer: {
+    backgroundColor: THEME.imageBg,
+    borderRadius: 32,
+    height: 340,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
   watchImage: {
     width: '100%',
@@ -367,10 +346,9 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   brandSubtitle: {
-    fontSize: 13,
+    fontSize: 14,
     color: THEME.textMuted,
-    fontWeight: '700',
-    letterSpacing: 1.5,
+    fontWeight: '500',
     textTransform: 'uppercase',
     marginBottom: 6,
   },
@@ -380,17 +358,18 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   mainTitle: {
-    fontSize: 26,
-    fontWeight: '800',
+    fontSize: 32,
+    fontWeight: '500',
     color: THEME.textDark,
     flex: 1,
     marginRight: 10,
     letterSpacing: -0.5,
   },
   price: {
-    fontSize: 22,
-    fontWeight: '800',
+    fontSize: 24,
+    fontWeight: '700',
     color: THEME.textDark,
+    marginTop: 4,
   },
   specsContainer: {
     marginTop: 24,
@@ -412,22 +391,22 @@ const styles = StyleSheet.create({
   },
   specItemBorderRight: {
     borderRightWidth: 1,
-    borderRightColor: THEME.imageBg,
+    borderRightColor: THEME.background,
   },
   specItemBorderBottom: {
     borderBottomWidth: 1,
-    borderBottomColor: THEME.imageBg,
+    borderBottomColor: THEME.background,
   },
   specLabel: {
-    fontSize: 11,
+    fontSize: 12,
     color: THEME.textMuted,
-    fontWeight: '700',
-    letterSpacing: 1,
+    fontWeight: '500',
+    letterSpacing: 0.5,
     marginBottom: 6,
   },
   specValue: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '600',
     color: THEME.textDark,
   },
   colorWrapper: {
@@ -445,15 +424,14 @@ const styles = StyleSheet.create({
     marginTop: 32,
   },
   sectionHeading: {
-    fontSize: 12,
-    color: THEME.textMuted,
-    fontWeight: '700',
-    letterSpacing: 1.5,
+    fontSize: 18,
+    color: THEME.textDark,
+    fontWeight: '500',
     marginBottom: 12,
   },
   descText: {
     fontSize: 15,
-    color: THEME.textDark,
+    color: THEME.textMuted,
     lineHeight: 24,
     fontWeight: '400',
   },
@@ -465,28 +443,31 @@ const styles = StyleSheet.create({
   },
   featureBox: {
     flex: 1,
-    backgroundColor: THEME.imageBg,
-    borderRadius: 16,
+    backgroundColor: THEME.surface,
+    borderRadius: 20,
     padding: 16,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
   },
   featureText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '500',
     color: THEME.textDark,
     marginTop: 10,
   },
-
-  /* Local Floating Action Bar (Dock) Styles */
   bottomBar: {
     position: 'absolute',
-    bottom: 105, // Elevated above the global App navigation dock
-    left: 24,
-    right: 24,
+    bottom: 105,
+    left: 20,
+    right: 20,
     flexDirection: 'row',
     padding: 12,
     backgroundColor: THEME.surface,
-    borderRadius: 24,
+    borderRadius: 32,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
@@ -495,48 +476,37 @@ const styles = StyleSheet.create({
     elevation: 6,
     zIndex: 10,
   },
-  deleteIconButton: {
+  secondaryIconButton: {
     width: 52,
     height: 52,
-    borderRadius: 16,
-    backgroundColor: '#FDEDED', // Soft red background for deletion action
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  editIconButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: THEME.imageBg,
+    borderRadius: 26,
+    backgroundColor: THEME.background,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
   primaryButton: {
     flex: 1,
-    backgroundColor: THEME.primary,
+    backgroundColor: THEME.accentColor,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     height: 52,
-    borderRadius: 16,
-    shadowColor: THEME.primary,
+    borderRadius: 26,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
     elevation: 4,
   },
   btnIcon: {
     marginRight: 8,
   },
   primaryButtonText: {
-    color: THEME.surface,
-    fontSize: 15,
-    fontWeight: '700',
+    color: THEME.textDark,
+    fontSize: 16,
+    fontWeight: '600',
   },
-
-  /* Error State Styles */
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -547,7 +517,7 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 16,
     color: THEME.textMuted,
-    fontWeight: '600',
+    fontWeight: '500',
     marginTop: 16,
     marginBottom: 24,
   },
@@ -555,12 +525,12 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.primary,
     paddingHorizontal: 24,
     paddingVertical: 14,
-    borderRadius: 16,
+    borderRadius: 26,
   },
   errorButtonText: {
     color: THEME.surface,
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '600',
   },
 });
 

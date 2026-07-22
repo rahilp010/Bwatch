@@ -20,103 +20,36 @@ import { PDFDocument } from 'pdf-lib';
 import RNFS from 'react-native-fs';
 import Toast from 'react-native-toast-message';
 import { useApp } from '../context/AppContext';
+import TemplateCoverCanvas from '../components/TemplateCoverCanvas';
 
 const { width } = Dimensions.get('window');
-const PAGE_WIDTH = width - 48;
+const PAGE_WIDTH = width - 40;
 const PAGE_HEIGHT = PAGE_WIDTH * 1.414;
 
-// --- THEME CONSTANTS ---
+// --- THEME MATCHING NEW DESIGN SYSTEM ---
 const THEME = {
-  background: '#FAFAFA',
+  background: '#E6E6E6',
   surface: '#FFFFFF',
-  primary: '#000000ff',
-  textDark: '#232F2C',
-  textMuted: '#7E918C',
-  imageBg: '#E0EAE8',
+  primary: '#1C1C1E',
+  textDark: '#1C1C1E',
+  textLight: '#FFFFFF',
+  textMuted: '#8E8E93',
+  accentColor: '#F0FE67',
+  imageBg: '#FFFFFF',
 };
 
-// Helper to chunk array for grid
-const chunkArray = (arr, size) => {
-  return arr.reduce(
+const chunkArray = (arr, size) =>
+  arr.reduce(
     (acc, _, i) => (i % size ? acc : [...acc, arr.slice(i, i + size)]),
     [],
   );
-};
 
-// Cover Page Component for individual watch
-const WatchCoverPage = ({ watch, style, pdfConfig }) => {
-  return (
-    <View style={[styles.heroPageContainer, style.borderStyle]}>
-      <Text
-        style={[
-          styles.heroMainTitle,
-          { fontFamily: style.text.fontFamily },
-        ]}
-      >
-        {watch.name || 'Watch Name Here'}
-      </Text>
-
-      <View style={styles.heroImageWrapper}>
-        <Image
-          source={{ uri: watch.image }}
-          style={styles.heroImage}
-          resizeMode="contain"
-        />
-      </View>
-
-      {/* Bottom Right Description Box */}
-      <View style={styles.heroDescBox}>
-        <Text style={styles.heroDescTitle}>DESCRIPTION</Text>
-
-        <View style={styles.heroSpecRow}>
-          <Text style={styles.heroSpecLabel}>Brand</Text>
-          <Text style={styles.heroSpecValue}>
-            {watch.brand || 'N/A'}
-          </Text>
-        </View>
-        <View style={styles.heroSpecRow}>
-          <Text style={styles.heroSpecLabel}>Gender</Text>
-          <Text style={styles.heroSpecValue}>
-            {watch.gender || 'Unisex'}
-          </Text>
-        </View>
-        <View style={styles.heroSpecRow}>
-          <Text style={styles.heroSpecLabel}>Type</Text>
-          <Text style={styles.heroSpecValue}>
-            {watch.type || 'Analogue'}
-          </Text>
-        </View>
-        <View style={styles.heroSpecRow}>
-          <Text style={styles.heroSpecLabel}>Dial Color</Text>
-          <Text style={styles.heroSpecValue}>
-            {watch.color || 'Standard'}
-          </Text>
-        </View>
-        <View style={styles.heroSpecRow}>
-          <Text style={styles.heroSpecLabel}>Strap</Text>
-          <Text style={styles.heroSpecValue}>
-            {watch.strap || 'Leather/Metal'}
-          </Text>
-        </View>
-        {watch.price && (
-          <View style={styles.heroSpecRow}>
-            <Text style={styles.heroSpecLabel}>Price</Text>
-            <Text style={styles.heroSpecValue}>₹{watch.price}</Text>
-          </View>
-        )}
-      </View>
-    </View>
-  );
-};
+// Cover page now rendered by TemplateCoverCanvas component
 
 const PDFPreviewScreen = () => {
   const { params, watches, goBack } = useApp();
-
-  const coverPageRef = useRef(null);
+  const coverPageRefs = useRef([]);
   const contentPageRefs = useRef([]);
-  // For separate mode, we need refs for each watch's cover page
-  const individualCoverRefs = useRef([]);
-
   const watchId = params?.watchId;
   const selectedWatchIds = useMemo(
     () => params?.selectedWatchIds || [],
@@ -129,16 +62,20 @@ const PDFPreviewScreen = () => {
 
   const pdfConfig = params?.pdfConfig || {
     showPrice: true,
-    showLogo: true,
     showDesc: true,
     template: 'minimal',
-    accentColor: '#121212',
-    customBgColor: '#FFFFFF',
-    fontFamily: 'sans-serif',
-    borderType: 'none',
-    coverTitle: 'B-WATCH',
-    coverSubtitle: 'OFFICIAL CATALOGUE',
-    watermarkText: 'B-WATCH',
+    templateBgColor: '#F5F5F5',
+    templateAccentColor: '#1C1C1E',
+    templateSecondaryAccent: '#8E8E93',
+    templateContent: {
+      subtitle: 'PREMIUM WATCH',
+      title: 'CATALOG',
+      brandName: 'Brand Name',
+      tagline: 'Timepiece Collection',
+      year: '2025-2026',
+      website: 'WWW.YOURWEBSITE.COM',
+    },
+    coverImage: null,
   };
 
   const targetWatches =
@@ -147,21 +84,21 @@ const PDFPreviewScreen = () => {
       : watch
       ? [watch]
       : [];
-
-  // Split into chunks of 9 (3 rows x 3 columns)
   const watchChunks = chunkArray(targetWatches, 9);
 
-  if (contentPageRefs.current.length !== watchChunks.length) {
-    contentPageRefs.current = Array(watchChunks.length)
+  const coverPagesCount = pdfMode === 'separate' ? targetWatches.length : 1;
+  if (coverPageRefs.current.length !== coverPagesCount) {
+    coverPageRefs.current = Array(coverPagesCount)
       .fill(null)
-      .map((_, i) => contentPageRefs.current[i] || React.createRef());
+      .map((_, i) => coverPageRefs.current[i] || React.createRef());
   }
 
-  // Initialize individual cover refs for separate mode
-  if (pdfMode === 'separate' && individualCoverRefs.current.length !== targetWatches.length) {
-    individualCoverRefs.current = Array(targetWatches.length)
+  const contentPagesCount =
+    pdfMode === 'separate' ? targetWatches.length : watchChunks.length;
+  if (contentPageRefs.current.length !== contentPagesCount) {
+    contentPageRefs.current = Array(contentPagesCount)
       .fill(null)
-      .map((_, i) => individualCoverRefs.current[i] || React.createRef());
+      .map((_, i) => contentPageRefs.current[i] || React.createRef());
   }
 
   const [isSharing, setIsSharing] = useState(false);
@@ -197,15 +134,21 @@ const PDFPreviewScreen = () => {
   });
 
   const getDynamicStyle = () => {
-    const accent = pdfConfig.accentColor || '#121212';
-    const bg = pdfConfig.customBgColor || '#FFFFFF';
-    const isDarkBg = ['#1A1A1A', '#0A1118'].includes(bg);
+    const bg = pdfConfig.templateBgColor || '#F5F5F5';
+    const isDarkBg = [
+      '#1A1A1A',
+      '#0A1118',
+      '#1C1C1E',
+      '#222426',
+      '#4A3C2A',
+    ].includes(bg);
+    
     const selectedFont =
-      pdfConfig.fontFamily === 'serif'
+      pdfConfig.detailsFontFamily === 'serif'
         ? Platform.OS === 'ios'
           ? 'Georgia'
           : 'serif'
-        : pdfConfig.fontFamily === 'monospace'
+        : pdfConfig.detailsFontFamily === 'monospace'
         ? Platform.OS === 'ios'
           ? 'Courier'
           : 'monospace'
@@ -216,24 +159,19 @@ const PDFPreviewScreen = () => {
       color: isDarkBg ? '#FFFFFF' : '#000000',
     };
 
-    let borderStyle = {};
-    if (pdfConfig.borderType === 'single')
-      borderStyle = { borderWidth: 2, borderColor: accent };
-    else if (pdfConfig.borderType === 'dotted')
-      borderStyle = {
-        borderWidth: 2,
-        borderColor: accent,
-        borderStyle: 'dotted',
-      };
+    const fontSizes = {
+      small: { title: 16, code: 11, price: 14 },
+      medium: { title: 20, code: 13, price: 18 },
+      large: { title: 24, code: 15, price: 22 },
+    };
+    const fontSize = fontSizes[pdfConfig.detailsFontSize || 'medium'] || fontSizes.medium;
 
     return {
-      page: { backgroundColor: bg, ...borderStyle },
+      page: { backgroundColor: bg },
       text: textStyle,
-      accentText: { ...textStyle, color: accent },
       mutedText: { ...textStyle, color: isDarkBg ? '#999999' : '#666666' },
-      borderStyle,
       isDarkBg,
-      accent,
+      fontSize,
     };
   };
 
@@ -252,199 +190,153 @@ const PDFPreviewScreen = () => {
   const handleShare = async () => {
     setIsSharing(true);
     try {
-      const coverUri = await captureRef(coverPageRef, {
-        format: 'jpeg',
-        quality: 0.85,
-      });
-      const contentUris = [];
-      for (let i = 0; i < watchChunks.length; i++) {
-        if (contentPageRefs.current[i]) {
-          const uri = await captureRef(contentPageRefs.current[i], {
-            format: 'jpeg',
-            quality: 0.85,
-          });
-          contentUris.push(uri);
-        }
+      if (pdfMode === 'separate' && targetWatches.length > 1) {
+        const filePaths = await generateSeparatePDFs();
+        await Share.open({
+          urls: filePaths.map(fp =>
+            Platform.OS === 'android' ? `file://${fp}` : fp,
+          ),
+          type: 'application/pdf',
+          title: 'Share Catalogues',
+        });
+      } else {
+        const filePath = await generateSinglePDF();
+        await Share.open({
+          url: Platform.OS === 'android' ? `file://${filePath}` : filePath,
+          type: 'application/pdf',
+          title: 'Share Catalogue',
+        });
       }
-      await Share.open({
-        urls: [coverUri, ...contentUris],
-        type: 'image/jpeg',
-        title: 'Share Catalogue',
-      });
     } catch (error) {
-      if (error && error.message && error.message.includes('User did not share')) {
-        return;
-      }
-      Toast.show({
-        type: 'error',
-        text1: 'Share Error',
-        text2: 'Failed to share catalogue.',
-      });
+      if (error?.message?.includes('User did not share')) return;
+      Toast.show({ type: 'error', text1: 'Share Error' });
     } finally {
       setIsSharing(false);
     }
   };
 
-  // Generate single PDF (all watches combined)
   const generateSinglePDF = async () => {
-    const coverBase64 = await captureRef(coverPageRef, {
+    const coverBase64 = await captureRef(coverPageRefs.current[0], {
       format: 'png',
       result: 'base64',
     });
     const contentBase64s = [];
     for (let i = 0; i < watchChunks.length; i++) {
-      if (contentPageRefs.current[i]) {
-        const base64 = await captureRef(contentPageRefs.current[i], {
-          format: 'png',
-          result: 'base64',
-        });
-        contentBase64s.push(base64);
-      }
+      if (contentPageRefs.current[i])
+        contentBase64s.push(
+          await captureRef(contentPageRefs.current[i], {
+            format: 'png',
+            result: 'base64',
+          }),
+        );
     }
-
     const pdfDoc = await PDFDocument.create();
     const coverImg = await pdfDoc.embedPng(coverBase64);
-    const page1 = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-    page1.drawImage(coverImg, {
+    pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]).drawImage(coverImg, {
       x: 0,
       y: 0,
       width: PAGE_WIDTH,
       height: PAGE_HEIGHT,
     });
-
     for (const base64 of contentBase64s) {
       const img = await pdfDoc.embedPng(base64);
-      const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-      page.drawImage(img, {
-        x: 0,
-        y: 0,
-        width: PAGE_WIDTH,
-        height: PAGE_HEIGHT,
-      });
+      pdfDoc
+        .addPage([PAGE_WIDTH, PAGE_HEIGHT])
+        .drawImage(img, { x: 0, y: 0, width: PAGE_WIDTH, height: PAGE_HEIGHT });
     }
-
     const pdfBase64 = await pdfDoc.saveAsBase64();
-    const fileName = `Catalogue_${new Date().getTime()}.pdf`;
-    const filePath = `${RNFS.CachesDirectoryPath}/${fileName}`;
-
+    const filePath = `${
+      RNFS.CachesDirectoryPath
+    }/Catalogue_${new Date().getTime()}.pdf`;
     await RNFS.writeFile(filePath, pdfBase64, 'base64');
     return filePath;
   };
 
-  // Generate separate PDF for each watch with watch-specific cover
   const generateSeparatePDFs = async () => {
     const filePaths = [];
+    for (let i = 0; i < targetWatches.length; i++) {
+      setCurrentDownloadIndex(i + 1);
+      const currentWatch = targetWatches[i];
 
-    for (let watchIndex = 0; watchIndex < targetWatches.length; watchIndex++) {
-      setCurrentDownloadIndex(watchIndex + 1);
-
-      const currentWatch = targetWatches[watchIndex];
-
-      // Capture watch-specific cover page
-      let coverBase64;
-      if (individualCoverRefs.current[watchIndex]) {
-        coverBase64 = await captureRef(individualCoverRefs.current[watchIndex], {
-          format: 'png',
-          result: 'base64',
-        });
-      } else {
-        // Fallback to shared cover if individual ref not available
-        coverBase64 = await captureRef(coverPageRef, {
-          format: 'png',
-          result: 'base64',
-        });
-      }
+      const coverBase64 = await captureRef(coverPageRefs.current[i], {
+        format: 'png',
+        result: 'base64',
+      });
+      const contentBase64 = await captureRef(contentPageRefs.current[i], {
+        format: 'png',
+        result: 'base64',
+      });
 
       const pdfDoc = await PDFDocument.create();
       const coverImg = await pdfDoc.embedPng(coverBase64);
-      const page1 = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-      page1.drawImage(coverImg, {
+      const contentImg = await pdfDoc.embedPng(contentBase64);
+
+      pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]).drawImage(coverImg, {
         x: 0,
         y: 0,
         width: PAGE_WIDTH,
         height: PAGE_HEIGHT,
       });
 
-      // Find which chunk this watch belongs to and capture that page
-      for (let chunkIndex = 0; chunkIndex < watchChunks.length; chunkIndex++) {
-        const chunk = watchChunks[chunkIndex];
-        const watchInChunk = chunk.find(w => w.id === currentWatch.id);
-
-        if (watchInChunk && contentPageRefs.current[chunkIndex]) {
-          const contentBase64 = await captureRef(contentPageRefs.current[chunkIndex], {
-            format: 'png',
-            result: 'base64',
-          });
-          const contentImg = await pdfDoc.embedPng(contentBase64);
-          const contentPage = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-          contentPage.drawImage(contentImg, {
-            x: 0,
-            y: 0,
-            width: PAGE_WIDTH,
-            height: PAGE_HEIGHT,
-          });
-          break;
-        }
-      }
+      pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]).drawImage(contentImg, {
+        x: 0,
+        y: 0,
+        width: PAGE_WIDTH,
+        height: PAGE_HEIGHT,
+      });
 
       const pdfBase64 = await pdfDoc.saveAsBase64();
-      const safeName = `${currentWatch.brand || 'Watch'}_${currentWatch.name || 'Model'}`.replace(/[^a-zA-Z0-9]/g, '_');
-      const fileName = `${safeName}_${new Date().getTime()}.pdf`;
-      const filePath = `${RNFS.CachesDirectoryPath}/${fileName}`;
+      const safeName = `${currentWatch.brand || 'Watch'}_${
+        currentWatch.name || 'Model'
+      }`.replace(/[^a-zA-Z0-9]/g, '_');
+      const filePath = `${
+        RNFS.CachesDirectoryPath
+      }/${safeName}_${new Date().getTime()}.pdf`;
 
       await RNFS.writeFile(filePath, pdfBase64, 'base64');
       filePaths.push(filePath);
     }
-
     return filePaths;
   };
 
   const handleDownload = async () => {
     setIsDownloading(true);
     try {
-      let filePaths = [];
-
       if (pdfMode === 'separate' && targetWatches.length > 1) {
         setTotalDownloads(targetWatches.length);
-        filePaths = await generateSeparatePDFs();
-
-        // Share all PDFs
+        const filePaths = await generateSeparatePDFs();
         await Share.open({
-          urls: filePaths.map(fp => Platform.OS === 'android' ? `file://${fp}` : fp),
+          urls: filePaths.map(fp =>
+            Platform.OS === 'android' ? `file://${fp}` : fp,
+          ),
           type: 'application/pdf',
           saveToFiles: true,
           title: 'Save PDF Catalogues',
+        });
+        Toast.show({
+          type: 'success',
+          text1: 'Saved',
+          text2: `${filePaths.length} PDFs saved successfully!`,
         });
       } else {
         setTotalDownloads(1);
         setCurrentDownloadIndex(1);
         const filePath = await generateSinglePDF();
-        filePaths = [filePath];
-
         await Share.open({
           url: Platform.OS === 'android' ? `file://${filePath}` : filePath,
           type: 'application/pdf',
           saveToFiles: true,
           title: 'Save PDF Catalogue',
         });
+        Toast.show({
+          type: 'success',
+          text1: 'Saved',
+          text2: 'Catalogue saved successfully!',
+        });
       }
-
-      Toast.show({
-        type: 'success',
-        text1: 'Saved',
-        text2: pdfMode === 'separate' && targetWatches.length > 1
-          ? `${filePaths.length} PDFs saved successfully!`
-          : 'Catalogue saved successfully!',
-      });
     } catch (error) {
-      if (error && error.message && error.message.includes('User did not share')) {
-        return;
-      }
-      Toast.show({
-        type: 'error',
-        text1: 'PDF Error',
-        text2: 'Failed to save PDF.',
-      });
+      if (error?.message?.includes('User did not share')) return;
+      Toast.show({ type: 'error', text1: 'PDF Error' });
     } finally {
       setIsDownloading(false);
       setCurrentDownloadIndex(0);
@@ -455,239 +347,207 @@ const PDFPreviewScreen = () => {
   const heroWatch = targetWatches[0];
   const style = getDynamicStyle();
 
-  // Render individual cover pages for separate mode (hidden, used for capture)
-  const renderIndividualCoverPages = () => {
-    if (pdfMode !== 'separate' || targetWatches.length <= 1) return null;
-    
-    return (
-      <View style={{ position: 'absolute', left: -9999, top: 0 }}>
-        {targetWatches.map((w, index) => (
-          <View
-            key={w.id}
-            ref={el => {
-              individualCoverRefs.current[index] = el;
-            }}
-            collapsable={false}
-            style={{
-              width: PAGE_WIDTH,
-              height: PAGE_HEIGHT,
-              opacity: 0.99,
-            }}
-          >
-            <WatchCoverPage watch={w} style={style} pdfConfig={pdfConfig} />
-          </View>
-        ))}
-      </View>
-    );
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={THEME.background} />
-
-      {/* HEADER */}
       <View style={styles.headerRow}>
-        <Text style={styles.heroText}>Catalogue Preview</Text>
-
         <TouchableOpacity
-          style={styles.iconButton}
+          style={[styles.iconButton, { backgroundColor: THEME.surface }]}
+          onPress={() => goBack()}
+        >
+          <Icon name="arrow-left" size={20} color={THEME.textDark} />
+        </TouchableOpacity>
+        <Text style={styles.heroText}>Preview</Text>
+        <TouchableOpacity
+          style={[styles.iconButton, { backgroundColor: THEME.primary }]}
           onPress={handleShare}
           disabled={isSharing}
         >
           {isSharing ? (
-            <ActivityIndicator size="small" color={THEME.textDark} />
+            <ActivityIndicator size="small" color={THEME.surface} />
           ) : (
-            <Icon name="share-2" size={20} color={THEME.textDark} />
+            <Icon name="share-2" size={20} color={THEME.surface} />
           )}
         </TouchableOpacity>
       </View>
-
-      {/* PDF Mode Indicator */}
-      {pdfMode === 'separate' && targetWatches.length > 1 && (
-        <View style={styles.modeIndicator}>
-          <Icon name="copy" size={16} color={THEME.primary} />
-          <Text style={styles.modeIndicatorText}>
-            Separate PDFs Mode ({targetWatches.length} PDFs will be generated)
-          </Text>
-        </View>
-      )}
-
-      {/* Hidden individual cover pages for separate mode capture */}
-      {renderIndividualCoverPages()}
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* PAGE 1: HERO COVER */}
-        <Animated.View style={[styles.pdfPage, getAnimStyle(1)]}>
-          <View
-            ref={coverPageRef}
-            collapsable={false}
-            style={[styles.heroPageContainer, style.borderStyle]}
-          >
-            <Text
-              style={[
-                styles.heroMainTitle,
-                { fontFamily: style.text.fontFamily },
-              ]}
-            >
-              {heroWatch.name || 'Watch Name Here'}
-            </Text>
-
-            <View style={styles.heroImageWrapper}>
-              <Image
-                source={{ uri: heroWatch.image }}
-                style={styles.heroImage}
-                resizeMode="contain"
-              />
-            </View>
-
-            {/* Bottom Right Description Box */}
-            <View style={styles.heroDescBox}>
-              <Text style={styles.heroDescTitle}>DESCRIPTION</Text>
-
-              <View style={styles.heroSpecRow}>
-                <Text style={styles.heroSpecLabel}>Brand</Text>
-                <Text style={styles.heroSpecValue}>
-                  {heroWatch.brand || 'N/A'}
-                </Text>
-              </View>
-              <View style={styles.heroSpecRow}>
-                <Text style={styles.heroSpecLabel}>Gender</Text>
-                <Text style={styles.heroSpecValue}>
-                  {heroWatch.gender || 'Unisex'}
-                </Text>
-              </View>
-              <View style={styles.heroSpecRow}>
-                <Text style={styles.heroSpecLabel}>Type</Text>
-                <Text style={styles.heroSpecValue}>
-                  {heroWatch.type || 'Analogue'}
-                </Text>
-              </View>
-              <View style={styles.heroSpecRow}>
-                <Text style={styles.heroSpecLabel}>Dial Color</Text>
-                <Text style={styles.heroSpecValue}>
-                  {heroWatch.color || 'Standard'}
-                </Text>
-              </View>
-              <View style={styles.heroSpecRow}>
-                <Text style={styles.heroSpecLabel}>Strap</Text>
-                <Text style={styles.heroSpecValue}>
-                  {heroWatch.strap || 'Leather/Metal'}
-                </Text>
-              </View>
-              {heroWatch.price && (
-                <View style={styles.heroSpecRow}>
-                  <Text style={styles.heroSpecLabel}>Price</Text>
-                  <Text style={styles.heroSpecValue}>₹{heroWatch.price}</Text>
+        {pdfMode === 'separate' ? (
+          targetWatches.map((item, index) => (
+            <React.Fragment key={item.id}>
+              {/* Watch Cover Page */}
+              <Animated.View style={[styles.pdfPage, getAnimStyle(1)]}>
+                <View
+                  ref={el => {
+                    coverPageRefs.current[index] = el;
+                  }}
+                  collapsable={false}
+                  style={styles.flex1}
+                >
+                  <TemplateCoverCanvas
+                    bgColor={pdfConfig.templateBgColor}
+                    accentColor={pdfConfig.templateAccentColor}
+                    secondaryAccent={pdfConfig.templateSecondaryAccent}
+                    content={{
+                      ...pdfConfig.templateContent,
+                      title: item.name,
+                      brandName: item.brand || 'Brand Name',
+                    }}
+                    coverImage={item.image}
+                    editMode={false}
+                    canvasWidth={PAGE_WIDTH}
+                    canvasHeight={PAGE_HEIGHT}
+                  />
                 </View>
-              )}
-            </View>
-          </View>
-        </Animated.View>
+              </Animated.View>
 
-        {/* PAGE 2+: GRID CONTENT */}
-        {watchChunks.map((chunk, pageIndex) => (
-          <Animated.View
-            key={pageIndex}
-            style={[styles.pdfPage, getAnimStyle(Math.min(pageIndex + 2, 3))]}
-          >
-            <View
-              ref={el => {
-                contentPageRefs.current[pageIndex] = el;
-              }}
-              collapsable={false}
-              style={[styles.gridPageContainer, style.page]}
-            >
-              <View
-                style={[
-                  styles.gridContent,
-                  targetWatches.length === 1 && styles.gridContentCentered,
-                ]}
-              >
-                {chunk.map(item => (
+              {/* Watch Details Page */}
+              <Animated.View style={[styles.pdfPage, getAnimStyle(2)]}>
+                <View
+                  ref={el => {
+                    contentPageRefs.current[index] = el;
+                  }}
+                  collapsable={false}
+                  style={[styles.gridPageContainer, style.page]}
+                >
                   <View
-                    key={item.id}
-                    style={[
-                      styles.gridItem,
-                      targetWatches.length === 1 && styles.gridItemSingle,
-                    ]}
+                    style={[styles.gridContent, styles.gridContentCentered]}
                   >
-                    <Image
-                      source={{ uri: item.image }}
-                      style={styles.gridItemImage}
-                      resizeMode="contain"
-                    />
-
-                    <Text
-                      style={[styles.gridItemName, style.text]}
-                      numberOfLines={1}
-                    >
-                      {item.name || 'Product Name'}
-                    </Text>
-
-                    <Text style={[styles.gridItemCode, style.mutedText]}>
-                      CODE: W_{item.id.substring(0, 5)}
-                    </Text>
-
-                    {pdfConfig.showPrice && (
-                      <>
-                        <View style={styles.gridItemDivider} />
-                        <Text style={[styles.gridItemPrice, style.text]}>
-                          ₹{' '}
-                          {item.price
-                            ? parseFloat(item.price).toFixed(2)
-                            : '0.00'}
-                        </Text>
-                      </>
-                    )}
-
-                    {/* Decorative Dots */}
-                    <View style={styles.gridItemDots}>
-                      <View
-                        style={[
-                          styles.dot,
-                          { backgroundColor: style.mutedText.color },
-                        ]}
+                    <View style={[styles.gridItem, styles.gridItemSingle]}>
+                      <Image
+                        source={{ uri: item.image }}
+                        style={[styles.gridItemImage, { transform: [{ scale: pdfConfig.detailsImageScale || 1.0 }] }]}
+                        resizeMode="contain"
                       />
-                      <View
-                        style={[
-                          styles.dot,
-                          { backgroundColor: style.mutedText.color },
-                        ]}
-                      />
-                      <View
-                        style={[
-                          styles.dot,
-                          { backgroundColor: style.mutedText.color },
-                        ]}
-                      />
-                      <View
-                        style={[
-                          styles.dot,
-                          { backgroundColor: style.mutedText.color },
-                        ]}
-                      />
+                      <Text
+                        style={[styles.gridItemName, style.text, { fontSize: style.fontSize.title }]}
+                        numberOfLines={1}
+                      >
+                        {pdfConfig.detailsShowBrand ? `${item.brand || 'Watch'} — ` : ''}{item.name}
+                      </Text>
+                      <Text style={[styles.gridItemCode, style.mutedText, { fontSize: style.fontSize.code }]}>
+                        {pdfConfig.detailsCodePrefix || 'CODE: '}{item.id.substring(0, 5)}
+                      </Text>
+                      {pdfConfig.showPrice && (
+                        <>
+                          <View style={styles.gridItemDivider} />
+                          <Text style={[styles.gridItemPrice, style.text, { fontSize: style.fontSize.price }]}>
+                            ₹ {item.price}
+                          </Text>
+                        </>
+                      )}
                     </View>
                   </View>
-                ))}
+                  <View style={styles.gridPageFooter}>
+                    <Text style={[styles.gridFooterText, style.mutedText]}>
+                      {pdfConfig.detailsFooterText || pdfConfig.templateContent?.title || 'CATALOG'} — Page 2
+                    </Text>
+                  </View>
+                </View>
+              </Animated.View>
+            </React.Fragment>
+          ))
+        ) : (
+          <>
+            {/* Shared Cover Page */}
+            <Animated.View style={[styles.pdfPage, getAnimStyle(1)]}>
+              <View
+                ref={el => {
+                  coverPageRefs.current[0] = el;
+                }}
+                collapsable={false}
+                style={styles.flex1}
+              >
+                <TemplateCoverCanvas
+                  bgColor={pdfConfig.templateBgColor}
+                  accentColor={pdfConfig.templateAccentColor}
+                  secondaryAccent={pdfConfig.templateSecondaryAccent}
+                  content={{
+                    ...pdfConfig.templateContent,
+                    brandName:
+                      pdfConfig.templateContent?.brandName || heroWatch.brand,
+                  }}
+                  coverImage={pdfConfig.coverImage || heroWatch.image}
+                  editMode={false}
+                  canvasWidth={PAGE_WIDTH}
+                  canvasHeight={PAGE_HEIGHT}
+                />
               </View>
+            </Animated.View>
 
-              <View style={styles.gridPageFooter}>
-                <Text style={[styles.gridFooterText, style.mutedText]}>
-                  {pdfConfig.coverTitle} / {pdfConfig.coverSubtitle} — Page{' '}
-                  {pageIndex + 1}
-                </Text>
-              </View>
-            </View>
-          </Animated.View>
-        ))}
-
+            {/* Grid Content Pages */}
+            {watchChunks.map((chunk, pageIndex) => (
+              <Animated.View
+                key={pageIndex}
+                style={[
+                  styles.pdfPage,
+                  getAnimStyle(Math.min(pageIndex + 2, 3)),
+                ]}
+              >
+                <View
+                  ref={el => {
+                    contentPageRefs.current[pageIndex] = el;
+                  }}
+                  collapsable={false}
+                  style={[styles.gridPageContainer, style.page]}
+                >
+                  <View
+                    style={[
+                      styles.gridContent,
+                      targetWatches.length === 1 && styles.gridContentCentered,
+                    ]}
+                  >
+                    {chunk.map(item => (
+                      <View
+                        key={item.id}
+                        style={[
+                          styles.gridItem,
+                          targetWatches.length === 1 && styles.gridItemSingle,
+                          targetWatches.length === 2 && styles.gridItemDouble,
+                        ]}
+                      >
+                        <Image
+                          source={{ uri: item.image }}
+                          style={[styles.gridItemImage, { transform: [{ scale: pdfConfig.detailsImageScale || 1.0 }] }]}
+                          resizeMode="contain"
+                        />
+                        <Text
+                          style={[styles.gridItemName, style.text, { fontSize: style.fontSize.title }]}
+                          numberOfLines={1}
+                        >
+                          {pdfConfig.detailsShowBrand ? `${item.brand || 'Watch'} — ` : ''}{item.name}
+                        </Text>
+                        <Text style={[styles.gridItemCode, style.mutedText, { fontSize: style.fontSize.code }]}>
+                          {pdfConfig.detailsCodePrefix || 'CODE: '}{item.id.substring(0, 5)}
+                        </Text>
+                        {pdfConfig.showPrice && (
+                          <>
+                            <View style={styles.gridItemDivider} />
+                            <Text style={[styles.gridItemPrice, style.text, { fontSize: style.fontSize.price }]}>
+                              ₹ {item.price}
+                            </Text>
+                          </>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                  <View style={styles.gridPageFooter}>
+                    <Text style={[styles.gridFooterText, style.mutedText]}>
+                      {pdfConfig.detailsFooterText || pdfConfig.templateContent?.title || 'CATALOG'} — Page{' '}
+                      {pageIndex + 2}
+                    </Text>
+                  </View>
+                </View>
+              </Animated.View>
+            ))}
+          </>
+        )}
         <View style={{ height: 160 }} />
       </ScrollView>
 
-      {/* FLOATING DOWNLOAD BUTTON */}
       <TouchableOpacity
         style={styles.downloadFab}
         onPress={handleDownload}
@@ -695,9 +555,9 @@ const PDFPreviewScreen = () => {
         activeOpacity={0.8}
       >
         {isDownloading ? (
-          <ActivityIndicator size="small" color={THEME.surface} />
+          <ActivityIndicator size="small" color={THEME.textDark} />
         ) : (
-          <Icon name="download" size={24} color={THEME.surface} />
+          <Icon name="download" size={24} color={THEME.textDark} />
         )}
       </TouchableOpacity>
 
@@ -709,137 +569,59 @@ const PDFPreviewScreen = () => {
           </Text>
         </View>
       )}
-
       <Toast />
     </SafeAreaView>
   );
 };
 
-// --- STYLES ---
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: THEME.background,
-  },
+  container: { flex: 1, backgroundColor: THEME.background },
+  flex1: { flex: 1 },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
+    alignItems: 'center',
+    paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: 20,
   },
   iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: THEME.surface,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  scrollContent: {
-    paddingBottom: 40,
-    alignItems: 'center',
-  },
-  heroText: {
-    fontSize: 28,
-    fontWeight: '400',
-    color: THEME.textDark,
-    alignSelf: 'flex-start',
-    letterSpacing: -0.5,
-  },
-  modeIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: THEME.surface,
-    marginHorizontal: 24,
-    marginBottom: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
-    elevation: 1,
+    elevation: 2,
   },
-  modeIndicatorText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: THEME.primary,
-    marginLeft: 8,
+  scrollContent: { paddingBottom: 40, alignItems: 'center' },
+  heroText: {
+    fontSize: 32,
+    fontWeight: '400',
+    color: THEME.textDark,
+    letterSpacing: -0.5,
   },
   pdfPage: {
     width: PAGE_WIDTH,
     height: PAGE_HEIGHT,
     backgroundColor: THEME.surface,
-    borderRadius: 8,
+    borderRadius: 32,
     marginBottom: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 4,
     overflow: 'hidden',
-  },
-  heroPageContainer: {
-    flex: 1,
-    backgroundColor: '#1A1A1A',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  heroMainTitle: {
-    position: 'absolute',
-    top: 40,
-    left: 30,
-    fontSize: 26,
-    fontWeight: '300',
-    color: '#FFFFFF',
-    letterSpacing: 1.5,
-    zIndex: 10,
-  },
-  heroImageWrapper: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  heroImage: { width: '120%', height: '120%', transform: [{ scale: 1.1 }] },
-  heroDescBox: {
-    position: 'absolute',
-    bottom: 30,
-    right: 30,
-    backgroundColor: 'rgba(30,30,30,0.95)',
-    padding: 16,
-    width: 180,
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  heroDescTitle: {
-    color: '#FFF',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1,
-    marginBottom: 12,
-  },
-  heroSpecRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  heroSpecLabel: { color: '#999', fontSize: 9 },
-  heroSpecValue: {
-    color: '#FFF',
-    fontSize: 9,
-    fontWeight: '500',
-    maxWidth: 90,
-    textAlign: 'right',
   },
   gridPageContainer: {
     flex: 1,
     padding: 24,
     paddingBottom: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: THEME.surface,
   },
   gridContent: {
     flex: 1,
@@ -857,10 +639,15 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   gridItemSingle: { width: '80%', transform: [{ scale: 1.2 }] },
+  gridItemDouble: {
+    width: '46%',
+    marginHorizontal: '2%',
+    transform: [{ scale: 1.05 }],
+  },
   gridItemImage: { width: '100%', height: 110, marginBottom: 12 },
   gridItemName: {
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '600',
     textAlign: 'center',
     marginBottom: 2,
   },
@@ -873,12 +660,10 @@ const styles = StyleSheet.create({
   },
   gridItemPrice: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '600',
     textAlign: 'center',
     marginBottom: 6,
   },
-  gridItemDots: { flexDirection: 'row', gap: 3 },
-  dot: { width: 3, height: 3, borderRadius: 1.5, opacity: 0.5 },
   gridPageFooter: {
     alignItems: 'center',
     paddingTop: 10,
@@ -890,22 +675,22 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 120,
     right: 24,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: THEME.primary,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: THEME.accentColor,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: THEME.primary,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.15,
     shadowRadius: 10,
     elevation: 8,
     zIndex: 999,
   },
   downloadProgress: {
     position: 'absolute',
-    bottom: 190,
+    bottom: 195,
     right: 24,
     backgroundColor: THEME.surface,
     paddingHorizontal: 16,
@@ -933,22 +718,17 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 16,
     color: THEME.textMuted,
-    fontWeight: '600',
+    fontWeight: '500',
     marginTop: 16,
     marginBottom: 24,
-    textAlign: 'center',
   },
   errorButton: {
     backgroundColor: THEME.primary,
     paddingHorizontal: 24,
     paddingVertical: 14,
-    borderRadius: 16,
+    borderRadius: 26,
   },
-  errorButtonText: {
-    color: THEME.surface,
-    fontSize: 15,
-    fontWeight: '700',
-  },
+  errorButtonText: { color: THEME.surface, fontSize: 15, fontWeight: '600' },
 });
 
 export default PDFPreviewScreen;

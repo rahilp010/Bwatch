@@ -74,6 +74,7 @@ def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 def vectorIconFonts = [
     "Feather.ttf",
     "FontAwesome.ttf",
+    "MaterialIcons.ttf",
     "MaterialCommunityIcons.ttf",
 ]
 

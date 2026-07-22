@@ -12,6 +12,7 @@ import {
   Dimensions,
   RefreshControl,
   Modal,
+  TextInput,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useApp } from '../context/AppContext';
@@ -20,19 +21,20 @@ const { width } = Dimensions.get('window');
 
 // --- THEME CONSTANTS ---
 const THEME = {
-  background: '#FAFAFA',
+  background: '#E6E6E6', // Soft light gray matching the image background
   surface: '#FFFFFF',
-  primary: '#000000ff',
-  textDark: '#232F2C',
-  textMuted: '#7E918C',
-  imageBg: '#E0EAE8',
+  primary: '#1C1C1E', // Very dark gray/black for buttons
+  inactivePill: '#D4D4D4', // Darker gray for inactive filter pills
+  textDark: '#1C1C1E',
+  textLight: '#FFFFFF',
+  textMuted: '#8E8E93',
+  accentColor: '#F0FE67', // Bright yellow for card button
+  notification: '#F0FE67', // Yellow for the notification dot
 };
 
 const CATEGORIES = ['All', 'Men', 'Women', 'Unisex'];
 
-// Skeleton Card component
-const SkeletonCard = ({ index }) => {
-  const isEven = index % 2 === 0;
+const SkeletonCard = () => {
   const pulseAnim = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
@@ -53,40 +55,8 @@ const SkeletonCard = ({ index }) => {
   }, [pulseAnim]);
 
   return (
-    <Animated.View
-      style={[
-        styles.cardContainer,
-        { marginTop: isEven ? 0 : 40, opacity: pulseAnim },
-      ]}
-    >
-      <View style={styles.cardImageWrapper}>
-        <View
-          style={[
-            styles.skeletonElement,
-            { width: '100%', height: '100%', borderRadius: 22 },
-          ]}
-        />
-      </View>
-      <View style={styles.cardInfo}>
-        <View
-          style={[
-            styles.skeletonElement,
-            { width: '80%', height: 16, borderRadius: 4, marginBottom: 8 },
-          ]}
-        />
-        <View
-          style={[
-            styles.skeletonElement,
-            { width: '50%', height: 12, borderRadius: 4, marginBottom: 8 },
-          ]}
-        />
-        <View
-          style={[
-            styles.skeletonElement,
-            { width: '40%', height: 14, borderRadius: 4 },
-          ]}
-        />
-      </View>
+    <Animated.View style={[styles.cardContainer, { opacity: pulseAnim }]}>
+      <View style={styles.skeletonCardImageWrapper} />
     </Animated.View>
   );
 };
@@ -94,50 +64,60 @@ const SkeletonCard = ({ index }) => {
 const Dashboard = () => {
   const { watches, loading, refreshWatches, navigate } = useApp();
 
-  // States
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedWatches, setSelectedWatches] = useState([]);
   const [sortBy, setSortBy] = useState('none');
   const [showPdfModeModal, setShowPdfModeModal] = useState(false);
 
-  // Animation Values
   const animatedValues = useRef([]);
   const slideAnim = useRef(new Animated.Value(width)).current;
   const modalAnim = useRef(new Animated.Value(0)).current;
 
-  // Swipe-to-refresh handler
   const handleRefresh = async () => {
     setRefreshing(true);
     await refreshWatches();
     setRefreshing(false);
   };
 
-  // 1. Filter Logic
   const filteredWatches = useMemo(() => {
     let result = (watches || []).filter(watch => {
-      if (selectedCategory === 'All') return true;
-      if (selectedCategory === 'Men' && watch.gender === 'Men') return true;
-      if (selectedCategory === 'Women' && watch.gender === 'Women') return true;
-      if (selectedCategory === 'Unisex' && watch.gender === 'Unisex')
-        return true;
-      return false;
+      let categoryMatch = true;
+      if (selectedCategory !== 'All') {
+        categoryMatch = watch.gender === selectedCategory;
+      }
+
+      let searchMatch = true;
+      if (searchQuery.trim() !== '') {
+        const query = searchQuery.toLowerCase();
+        searchMatch =
+          (watch.name && watch.name.toLowerCase().includes(query)) ||
+          (watch.brand && watch.brand.toLowerCase().includes(query));
+      }
+
+      return categoryMatch && searchMatch;
     });
 
     if (sortBy === 'price_asc') {
-      result = [...result].sort((a, b) => parseFloat(a.price || 0) - parseFloat(b.price || 0));
+      result = [...result].sort(
+        (a, b) => parseFloat(a.price || 0) - parseFloat(b.price || 0),
+      );
     } else if (sortBy === 'price_desc') {
-      result = [...result].sort((a, b) => parseFloat(b.price || 0) - parseFloat(a.price || 0));
+      result = [...result].sort(
+        (a, b) => parseFloat(b.price || 0) - parseFloat(a.price || 0),
+      );
     } else if (sortBy === 'brand_asc') {
-      result = [...result].sort((a, b) => (a.brand || '').localeCompare(b.brand || ''));
+      result = [...result].sort((a, b) =>
+        (a.brand || '').localeCompare(b.brand || ''),
+      );
     }
 
     return result;
-  }, [watches, selectedCategory, sortBy]);
+  }, [watches, selectedCategory, sortBy, searchQuery]);
 
-  // 2. Entrance Animation for Grid Items
   useEffect(() => {
     animatedValues.current = filteredWatches.map(() => new Animated.Value(0));
 
@@ -150,9 +130,8 @@ const Dashboard = () => {
     });
 
     Animated.stagger(80, animations).start();
-  }, [filteredWatches, selectedCategory]);
+  }, [filteredWatches, selectedCategory, searchQuery]);
 
-  // 3. Side Panel Toggle Animation
   const toggleFilter = open => {
     setIsFilterOpen(open);
     Animated.timing(slideAnim, {
@@ -162,13 +141,11 @@ const Dashboard = () => {
     }).start();
   };
 
-  // 4. Selection Mode Toggle
   const toggleSelectionMode = () => {
     setIsSelectionMode(!isSelectionMode);
     setSelectedWatches([]);
   };
 
-  // 5. Toggle Watch Selection
   const toggleWatchSelection = watchId => {
     setSelectedWatches(prev => {
       if (prev.includes(watchId)) {
@@ -179,28 +156,30 @@ const Dashboard = () => {
     });
   };
 
-  // 6. Handle Generate Catalog
   const handleGenerateCatalog = () => {
     if (selectedWatches.length === 0) return;
-    // If only 1 watch selected, go directly to CatalogueBuilder
     if (selectedWatches.length === 1) {
-      navigate('CatalogueBuilder', { selectedWatchIds: selectedWatches, pdfMode: 'single' });
+      navigate('CatalogueBuilder', {
+        selectedWatchIds: selectedWatches,
+        pdfMode: 'single',
+      });
       setIsSelectionMode(false);
       setSelectedWatches([]);
       return;
     }
-    // If multiple watches selected, show PDF mode selection modal
     setShowPdfModeModal(true);
   };
 
-  const handlePdfModeSelect = (mode) => {
+  const handlePdfModeSelect = mode => {
     setShowPdfModeModal(false);
-    navigate('CatalogueBuilder', { selectedWatchIds: selectedWatches, pdfMode: mode });
+    navigate('CatalogueBuilder', {
+      selectedWatchIds: selectedWatches,
+      pdfMode: mode,
+    });
     setIsSelectionMode(false);
     setSelectedWatches([]);
   };
 
-  // Modal Animation - only animate in, let React Native Modal handle fade out
   useEffect(() => {
     if (showPdfModeModal) {
       modalAnim.setValue(0);
@@ -213,11 +192,9 @@ const Dashboard = () => {
     }
   }, [showPdfModeModal]);
 
-  // Card Render Function
   const renderCard = (item, index) => {
     const anim = animatedValues.current[index] || new Animated.Value(1);
     const isSelected = selectedWatches.includes(item.id);
-    const isEven = index % 2 === 0;
 
     const translateY = anim.interpolate({
       inputRange: [0, 1],
@@ -229,13 +206,12 @@ const Dashboard = () => {
         key={item.id}
         style={[
           styles.cardContainer,
-          { marginTop: isEven ? 0 : 40 },
           { opacity: anim, transform: [{ translateY }] },
         ]}
       >
         <TouchableOpacity
           style={styles.cardTouchable}
-          activeOpacity={0.8}
+          activeOpacity={0.9}
           onPress={() => {
             if (isSelectionMode) toggleWatchSelection(item.id);
             else navigate('WatchDetails', { watchId: item.id });
@@ -248,11 +224,10 @@ const Dashboard = () => {
           }}
           delayLongPress={300}
         >
-          {/* Card Image */}
           <View
             style={[
-              styles.cardImageWrapper,
-              isSelectionMode && isSelected && styles.cardImageWrapperSelected,
+              styles.cardBackground,
+              isSelectionMode && isSelected && styles.cardBackgroundSelected,
             ]}
           >
             <Image
@@ -260,35 +235,50 @@ const Dashboard = () => {
               style={styles.cardImage}
               resizeMode="cover"
             />
-            <View
-              style={[
-                styles.actionButton,
-                isSelected && styles.actionButtonSelected,
-              ]}
-            >
+            <View style={styles.imageOverlay} />
+            <View style={styles.cardTopSection}>
               {isSelectionMode ? (
-                <Icon
-                  name="check"
-                  size={18}
-                  color={isSelected ? THEME.surface : THEME.primary}
-                />
+                <View
+                  style={[
+                    styles.selectionCheck,
+                    isSelected && styles.selectionCheckActive,
+                  ]}
+                >
+                  {isSelected && (
+                    <Icon name="check" size={16} color={THEME.surface} />
+                  )}
+                </View>
               ) : (
-                <Icon name="shopping-bag" size={16} color={THEME.surface} />
+                <View />
               )}
-            </View>
-          </View>
 
-          {/* Card Info */}
-          <View style={styles.cardInfo}>
-            <Text style={styles.cardTitle} numberOfLines={1}>
-              {item.name}
-            </Text>
-            <Text style={styles.cardSubtitle} numberOfLines={1}>
-              {item.brand}
-            </Text>
-            <Text style={styles.cardPrice}>
-              ₹{item.price ? parseFloat(item.price).toFixed(2) : '0.00'}
-            </Text>
+              <View style={styles.pricePill}>
+                <Icon
+                  name="tag"
+                  size={12}
+                  color={THEME.textDark}
+                  style={styles.priceIcon}
+                />
+                <Text style={styles.priceText}>
+                  ₹{item.price ? parseFloat(item.price).toFixed(2) : '0.00'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.cardBottomSection}>
+              <View style={styles.cardTextContent}>
+                <Text style={styles.cardTitle} numberOfLines={2}>
+                  {item.name ? item.name : 'Product Name'}
+                </Text>
+                <Text style={styles.cardBrand} numberOfLines={1}>
+                  {item.brand ? item.brand : 'Brand'}
+                </Text>
+              </View>
+
+              <View style={styles.actionButton}>
+                <Icon name="arrow-up-right" size={24} color={THEME.textDark} />
+              </View>
+            </View>
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -299,48 +289,62 @@ const Dashboard = () => {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={THEME.background} />
 
-      {/* HEADER */}
-      <View style={styles.headerRow}>
-        <Text style={styles.logoText}>B-WATCH</Text>
-
-        <View style={styles.headerActions}>
+      <View style={styles.headerSection}>
+        <View style={styles.headerTopRow}>
           {isSelectionMode ? (
-            <>
+            <View style={styles.headerActions}>
               <TouchableOpacity
-                style={styles.iconButton}
+                style={[
+                  styles.headerIconButton,
+                  { backgroundColor: THEME.surface },
+                ]}
                 onPress={toggleSelectionMode}
               >
-                <Icon name="x" size={20} color={THEME.textDark} />
+                <Icon name="x" size={22} color={THEME.textDark} />
               </TouchableOpacity>
               {selectedWatches.length > 0 && (
                 <TouchableOpacity
                   style={[
-                    styles.iconButton,
+                    styles.headerIconButton,
                     { backgroundColor: THEME.primary },
                   ]}
                   onPress={handleGenerateCatalog}
                 >
-                  <Icon name="file-text" size={18} color={THEME.surface} />
+                  <Icon name="file-text" size={20} color={THEME.textLight} />
                 </TouchableOpacity>
               )}
-            </>
+            </View>
           ) : (
             <>
-              <TouchableOpacity
-                style={styles.iconButton}
-                onPress={toggleSelectionMode}
+              {/* White Grid Button (Left) */}
+              {/* <TouchableOpacity
+                style={[
+                  styles.headerIconButton,
+                  { backgroundColor: THEME.surface },
+                ]}
               >
-                <Icon name="check-square" size={18} color={THEME.textDark} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.iconButton}
-                onPress={() => toggleFilter(true)}
+                <Icon name="grid" size={20} color={THEME.textDark} />
+              </TouchableOpacity> */}
+
+              {/* Dark Bell Button with Notification Dot (Right) */}
+              {/* <TouchableOpacity
+                style={[
+                  styles.headerIconButton,
+                  { backgroundColor: THEME.primary },
+                ]}
+                onPress={() =>
+                  toggleSelectionMode()
+                }
               >
-                <Icon name="menu" size={20} color={THEME.textDark} />
-              </TouchableOpacity>
+                <Icon name="bell" size={20} color={THEME.textLight} />
+                <View style={styles.notificationDot} />
+              </TouchableOpacity> */}
             </>
           )}
         </View>
+
+        {/* Soft, cleaner typography matching image */}
+        <Text style={styles.mainHeaderText}>Watches</Text>
       </View>
 
       <ScrollView
@@ -355,50 +359,69 @@ const Dashboard = () => {
           />
         }
       >
-        {/* HERO SECTION */}
-        <View style={styles.heroSection}>
-          <Text style={styles.heroText}>Collections</Text>
-          {isSelectionMode && (
-            <Text style={styles.selectText}>
-              {selectedWatches.length} Selected
-            </Text>
-          )}
+        <View style={styles.brandsSection}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoryScroll}
+          >
+            {CATEGORIES.map(cat => {
+              const isActive = selectedCategory === cat;
+              return (
+                <TouchableOpacity
+                  key={cat}
+                  style={[
+                    styles.categoryPill,
+                    isActive
+                      ? styles.categoryPillActive
+                      : styles.categoryPillInactive,
+                  ]}
+                  onPress={() => setSelectedCategory(cat)}
+                  activeOpacity={0.8}
+                >
+                  <Text
+                    style={[
+                      styles.categoryPillText,
+                      isActive && styles.categoryPillTextActive,
+                    ]}
+                  >
+                    {cat}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </View>
 
-        {/* QUICK CATEGORY PILLS */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryScroll}
-        >
-          {CATEGORIES.map(cat => (
-            <TouchableOpacity
-              key={cat}
-              style={[
-                styles.categoryPill,
-                selectedCategory === cat && styles.categoryPillActive,
-              ]}
-              onPress={() => setSelectedCategory(cat)}
-              activeOpacity={0.8}
-            >
-              <Text
-                style={[
-                  styles.categoryPillText,
-                  selectedCategory === cat && styles.categoryPillTextActive,
-                ]}
-              >
-                {cat}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        <View style={styles.searchRow}>
+          <View style={styles.searchContainer}>
+            <Icon
+              name="search"
+              size={20}
+              color={THEME.textMuted}
+              style={styles.searchIcon}
+            />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search watches..."
+              placeholderTextColor={THEME.textMuted}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+          </View>
+          <TouchableOpacity
+            style={styles.filterButton}
+            onPress={() => toggleFilter(true)}
+          >
+            <Icon name="sliders" size={20} color={THEME.textDark} />
+          </TouchableOpacity>
+        </View>
 
-        {/* BEST PICKS LIST */}
         <View style={styles.listSection}>
           {loading && !refreshing ? (
             <View style={styles.listContainer}>
-              {Array.from({ length: 6 }).map((_, idx) => (
-                <SkeletonCard key={idx} index={idx} />
+              {Array.from({ length: 3 }).map((_, idx) => (
+                <SkeletonCard key={idx} />
               ))}
             </View>
           ) : filteredWatches.length === 0 ? (
@@ -414,7 +437,6 @@ const Dashboard = () => {
         </View>
       </ScrollView>
 
-      {/* RIGHT PANEL OVERLAY */}
       {isFilterOpen && (
         <TouchableOpacity
           style={styles.overlay}
@@ -423,7 +445,6 @@ const Dashboard = () => {
         />
       )}
 
-      {/* SLIDING RIGHT PANEL (FILTERS) */}
       <Animated.View
         style={[styles.rightPanel, { transform: [{ translateX: slideAnim }] }]}
       >
@@ -458,7 +479,7 @@ const Dashboard = () => {
             Price: Low to High
           </Text>
           {sortBy === 'price_asc' && (
-            <Icon name="check" size={18} color={THEME.surface} />
+            <Icon name="check" size={18} color={THEME.textLight} />
           )}
         </TouchableOpacity>
 
@@ -481,11 +502,13 @@ const Dashboard = () => {
             Price: High to Low
           </Text>
           {sortBy === 'price_desc' && (
-            <Icon name="check" size={18} color={THEME.surface} />
+            <Icon name="check" size={18} color={THEME.textLight} />
           )}
         </TouchableOpacity>
 
-        <Text style={[styles.filterSectionTitle, { marginTop: 24 }]}>SORT BY BRAND</Text>
+        <Text style={[styles.filterSectionTitle, { marginTop: 24 }]}>
+          SORT BY BRAND
+        </Text>
 
         <TouchableOpacity
           style={[
@@ -506,12 +529,11 @@ const Dashboard = () => {
             Brand Name (A-Z)
           </Text>
           {sortBy === 'brand_asc' && (
-            <Icon name="check" size={18} color={THEME.surface} />
+            <Icon name="check" size={18} color={THEME.textLight} />
           )}
         </TouchableOpacity>
       </Animated.View>
 
-      {/* PDF MODE SELECTION MODAL */}
       <Modal
         visible={showPdfModeModal}
         transparent
@@ -519,7 +541,7 @@ const Dashboard = () => {
         onRequestClose={() => setShowPdfModeModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <Animated.View 
+          <Animated.View
             style={[
               styles.modalContainer,
               {
@@ -537,7 +559,7 @@ const Dashboard = () => {
           >
             <View style={styles.modalHeader}>
               <View style={styles.modalIconContainer}>
-                <Icon name="file-text" size={28} color={THEME.surface} />
+                <Icon name="file-text" size={28} color={THEME.textLight} />
               </View>
               <Text style={styles.modalTitle}>PDF Export Mode</Text>
               <Text style={styles.modalSubtitle}>
@@ -549,7 +571,6 @@ const Dashboard = () => {
               Choose how you want to generate the PDF catalogue:
             </Text>
 
-            {/* Single PDF Option */}
             <TouchableOpacity
               style={styles.modalOption}
               onPress={() => handlePdfModeSelect('single')}
@@ -567,7 +588,6 @@ const Dashboard = () => {
               <Icon name="chevron-right" size={20} color={THEME.textMuted} />
             </TouchableOpacity>
 
-            {/* Separate PDFs Option */}
             <TouchableOpacity
               style={styles.modalOption}
               onPress={() => handlePdfModeSelect('separate')}
@@ -585,7 +605,6 @@ const Dashboard = () => {
               <Icon name="chevron-right" size={20} color={THEME.textMuted} />
             </TouchableOpacity>
 
-            {/* Cancel Button */}
             <TouchableOpacity
               style={styles.modalCancelButton}
               onPress={() => setShowPdfModeModal(false)}
@@ -599,165 +618,258 @@ const Dashboard = () => {
   );
 };
 
-// --- STYLES ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: THEME.background,
   },
-  headerRow: {
+  headerSection: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
+  },
+  headerTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 20,
+    marginBottom: 20,
   },
-  logoText: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: THEME.textDark,
-    letterSpacing: 1.2,
+  headerIconButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  notificationDot: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: THEME.notification,
+    borderWidth: 1.5,
+    borderColor: THEME.primary,
   },
   headerActions: {
     flexDirection: 'row',
     gap: 12,
+    flex: 1,
+    justifyContent: 'space-between',
   },
-  iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  mainHeaderText: {
+    fontSize: 40,
+    fontWeight: '400',
+    color: THEME.textDark,
+    letterSpacing: 0,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    marginBottom: 24,
+    gap: 12,
+  },
+  searchContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: THEME.surface,
+    borderRadius: 30,
+    paddingHorizontal: 20,
+    height: 60,
+  },
+  searchIcon: {
+    marginRight: 12,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: THEME.textDark,
+  },
+  filterButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: THEME.surface,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
   },
-  scrollContent: {
-    paddingBottom: 120,
-  },
-  heroSection: {
-    paddingHorizontal: 24,
+  brandsSection: {
     marginBottom: 24,
   },
-  heroText: {
-    fontSize: 32,
-    fontWeight: '400',
-    color: THEME.textDark,
-    alignSelf: 'flex-start',
-    letterSpacing: -0.5,
-  },
-  selectText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: THEME.primary,
-    marginTop: 8,
-  },
   categoryScroll: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     gap: 12,
-    marginBottom: 36,
   },
   categoryPill: {
-    backgroundColor: THEME.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: 30,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-    marginRight: 1,
   },
   categoryPillActive: {
-    backgroundColor: THEME.primary,
+    backgroundColor: THEME.surface,
+  },
+  categoryPillInactive: {
+    backgroundColor: THEME.inactivePill,
   },
   categoryPillText: {
     fontSize: 15,
     fontWeight: '500',
-    color: THEME.textMuted,
+    color: THEME.textDark,
   },
   categoryPillTextActive: {
-    color: THEME.surface,
+    color: THEME.textDark,
     fontWeight: '600',
   },
+  scrollContent: {
+    paddingBottom: 120,
+  },
   listSection: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
   },
   listContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
+    gap: 24,
   },
   cardContainer: {
-    width: '47%',
-    marginBottom: 32,
+    width: '100%',
   },
   cardTouchable: {
-    flexDirection: 'column',
     width: '100%',
   },
-  cardImageWrapper: {
+  cardBackground: {
     width: '100%',
-    aspectRatio: 0.82,
-    borderRadius: 24,
-    backgroundColor: THEME.imageBg,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
+    aspectRatio: 0.9,
+    backgroundColor: THEME.primary,
+    borderRadius: 32,
+    overflow: 'hidden',
     borderWidth: 2,
     borderColor: 'transparent',
+    position: 'relative',
   },
-  cardImageWrapperSelected: {
-    borderColor: THEME.primary,
+  cardBackgroundSelected: {
+    borderColor: THEME.textMuted,
   },
   cardImage: {
+    position: 'absolute',
     width: '100%',
     height: '100%',
-    borderRadius: 22,
+    top: 0,
+    left: 0,
+    resizeMode: 'cover',
+    zIndex: 1,
   },
-  cardInfo: {
-    paddingHorizontal: 4,
-    width: '100%',
+  imageOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '40%',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    zIndex: 2,
   },
-  cardTitle: {
+  cardTopSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    padding: 16,
+    zIndex: 3,
+  },
+  pricePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: THEME.surface,
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  priceIcon: {
+    marginRight: 6,
+  },
+  priceText: {
+    color: THEME.textDark,
     fontSize: 16,
     fontWeight: '700',
-    color: THEME.textDark,
-    marginBottom: 4,
   },
-  cardSubtitle: {
-    fontSize: 13,
-    color: THEME.textMuted,
-    marginBottom: 8,
+  selectionCheck: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  cardPrice: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: THEME.textDark,
+  selectionCheckActive: {
+    backgroundColor: THEME.primary,
+    borderWidth: 1,
+    borderColor: THEME.surface,
+  },
+  cardBottomSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 3,
+  },
+  cardTextContent: {
+    flex: 1,
+    marginRight: 16,
+    justifyContent: 'center',
+  },
+  cardTitle: {
+    color: THEME.textLight,
+    fontSize: 24,
+    fontWeight: '500',
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
+  },
+  cardBrand: {
+    color: THEME.textLight,
+    fontSize: 14,
+    fontWeight: '400',
+    opacity: 0.9,
+    marginTop: 4,
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   actionButton: {
-    position: 'absolute',
-    bottom: 12,
-    right: 12,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: THEME.primary,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: THEME.accentColor,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  actionButtonSelected: {
-    backgroundColor: THEME.primary,
+  skeletonCardImageWrapper: {
+    width: '100%',
+    aspectRatio: 0.9,
+    backgroundColor: '#D3D3D3',
+    borderRadius: 32,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -786,13 +898,8 @@ const styles = StyleSheet.create({
     width: width * 0.75,
     backgroundColor: THEME.surface,
     zIndex: 100,
-    shadowColor: '#000',
-    shadowOffset: { width: -10, height: 0 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 20,
     paddingTop: 60,
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
   },
   panelHeader: {
     flexDirection: 'row',
@@ -835,12 +942,8 @@ const styles = StyleSheet.create({
     color: THEME.textDark,
   },
   filterOptionTextActive: {
-    color: THEME.surface,
+    color: THEME.textLight,
   },
-  skeletonElement: {
-    backgroundColor: '#EAEAEA',
-  },
-  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -854,11 +957,6 @@ const styles = StyleSheet.create({
     padding: 24,
     width: '100%',
     maxWidth: 380,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
-    elevation: 10,
   },
   modalHeader: {
     alignItems: 'center',
@@ -898,8 +996,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'transparent',
   },
   modalOptionIconContainer: {
     width: 48,
@@ -909,11 +1005,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
   },
   modalOptionContent: {
     flex: 1,

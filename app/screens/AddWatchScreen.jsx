@@ -25,35 +25,29 @@ import { isConfigured } from '../supabase/client';
 
 const { width } = Dimensions.get('window');
 
-// --- THEME CONSTANTS MATCHING DASHBOARD ---
+// --- THEME MATCHING NEW DESIGN SYSTEM ---
 const THEME = {
-  background: '#FAFAFA',
+  background: '#E6E6E6',
   surface: '#FFFFFF',
-  primary: '#000000ff',
-  textDark: '#232F2C',
-  textMuted: '#7E918C',
-  imageBg: '#E0EAE8',
+  primary: '#1C1C1E',
+  inactivePill: '#D4D4D4',
+  textDark: '#1C1C1E',
+  textLight: '#FFFFFF',
+  textMuted: '#8E8E93',
+  accentColor: '#F0FE67',
+  imageBg: '#FFFFFF',
 };
 
-const PRESET_IMAGES = [
-  'https://images.unsplash.com/photo-1523170335258-f5ed11844a49?q=80&w=600&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1547996160-81dfa63595aa?q=80&w=600&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1522312346375-d1a52e2b99b3?q=80&w=600&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1587836374828-4dbafa94cf0e?q=80&w=600&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1614162692292-7ac56d7f7f1e?q=80&w=600&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1508656937213-bea3594fa3df?q=80&w=600&auto=format&fit=crop',
-];
+const PRESET_IMAGES = [];
 
 const STRAP_OPTIONS = ['Metal', 'Leather', 'Rubber', 'Fabric'];
 const WATCH_TYPES = ['Analogue', 'Digital', 'Smartwatch'];
 
 const AddWatchScreen = () => {
   const { params, addWatch, updateWatch, watches, navigate, goBack } = useApp();
-
   const editWatchId = params?.watchId;
   const isEditMode = !!editWatchId;
 
-  // Form State
   const [brand, setBrand] = useState('');
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
@@ -64,18 +58,14 @@ const AddWatchScreen = () => {
   const [description, setDescription] = useState('');
   const [imageUrl, setImageUrl] = useState('');
 
-  // Image Selection Modal/Options State
   const [showGallery, setShowGallery] = useState(false);
   const [customUrlInput, setCustomUrlInput] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const scanLineAnim = useRef(new Animated.Value(0)).current;
-
-  // Setup Animated Values for staggered entrance
   const animValues = useRef(
     [...Array(10)].map(() => new Animated.Value(0)),
   ).current;
 
-  // Set form fields based on whether we are in edit mode or add mode
   useEffect(() => {
     if (isEditMode) {
       const watchToEdit = (watches || []).find(w => w.id === editWatchId);
@@ -111,7 +101,6 @@ const AddWatchScreen = () => {
         useNativeDriver: true,
       }),
     );
-
     Animated.stagger(80, animations).start();
   }, [animValues]);
 
@@ -130,7 +119,6 @@ const AddWatchScreen = () => {
         );
         return granted === PermissionsAndroid.RESULTS.GRANTED;
       } catch (err) {
-        console.warn(err);
         return false;
       }
     }
@@ -143,14 +131,12 @@ const AddWatchScreen = () => {
       Toast.show({
         type: 'error',
         text1: 'Permission Denied',
-        text2: 'Camera permission is required to scan watches.',
+        text2: 'Camera permission is required.',
       });
       return;
     }
-
     setIsScanning(true);
     scanLineAnim.setValue(0);
-
     Animated.sequence([
       Animated.timing(scanLineAnim, {
         toValue: 1,
@@ -164,106 +150,52 @@ const AddWatchScreen = () => {
       }),
     ]).start(({ finished }) => {
       if (finished) {
-        const options = {
-          mediaType: 'photo',
-          quality: 0.8,
-          saveToPhotos: true,
-        };
-
-        launchCamera(options, async response => {
-          setIsScanning(false);
-
-          if (response.didCancel) {
-            console.log('User cancelled camera picker');
-          } else if (response.errorCode) {
-            Toast.show({
-              type: 'error',
-              text1: 'Camera Error',
-              text2: response.errorMessage || 'Failed to open camera.',
-            });
-          } else if (response.assets && response.assets.length > 0) {
-            const imageUri = response.assets[0].uri;
-
-            if (isConfigured) {
-              try {
-                Toast.show({
-                  type: 'info',
-                  text1: 'Uploading',
-                  text2: 'Uploading image to cloud storage...',
-                });
-                const fileName = `watch_${Date.now()}.jpg`;
-                const publicUrl = await uploadWatchImage(imageUri, fileName);
-                setImageUrl(publicUrl);
-                Toast.show({
-                  type: 'success',
-                  text1: 'Scan Complete',
-                  text2: 'Timepiece scanned and uploaded successfully!',
-                });
-              } catch (error) {
+        launchCamera(
+          { mediaType: 'photo', quality: 0.8, saveToPhotos: true },
+          async response => {
+            setIsScanning(false);
+            if (response.didCancel) return;
+            if (response.assets && response.assets.length > 0) {
+              const imageUri = response.assets[0].uri;
+              if (isConfigured) {
+                try {
+                  Toast.show({ type: 'info', text1: 'Uploading...' });
+                  const publicUrl = await uploadWatchImage(
+                    imageUri,
+                    `watch_${Date.now()}.jpg`,
+                  );
+                  setImageUrl(publicUrl);
+                  Toast.show({ type: 'success', text1: 'Scan Complete' });
+                } catch (error) {
+                  setImageUrl(imageUri);
+                }
+              } else {
                 setImageUrl(imageUri);
-                Toast.show({
-                  type: 'info',
-                  text1: 'Using Local Image',
-                  text2:
-                    'Could not upload to cloud, using local image instead.',
-                });
               }
-            } else {
-              setImageUrl(imageUri);
-              Toast.show({
-                type: 'success',
-                text1: 'Scan Complete',
-                text2: 'Timepiece scanned and loaded successfully!',
-              });
             }
-          }
-        });
+          },
+        );
       }
     });
   };
 
   const handleBrowseDeviceLibrary = () => {
-    const options = {
-      mediaType: 'photo',
-      quality: 0.8,
-    };
-
-    launchImageLibrary(options, async response => {
-      if (response.didCancel) {
-        console.log('User cancelled image picker');
-      } else if (response.errorCode) {
-        Toast.show({
-          type: 'error',
-          text1: 'Error',
-          text2: response.errorMessage || 'Failed to open gallery.',
-        });
-      } else if (response.assets && response.assets.length > 0) {
+    launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, async response => {
+      if (response.didCancel) return;
+      if (response.assets && response.assets.length > 0) {
         const imageUri = response.assets[0].uri;
-
         if (isConfigured) {
           try {
-            Toast.show({
-              type: 'info',
-              text1: 'Uploading',
-              text2: 'Uploading image to cloud storage...',
-            });
-            const fileName = `watch_${Date.now()}.jpg`;
-            const publicUrl = await uploadWatchImage(imageUri, fileName);
+            Toast.show({ type: 'info', text1: 'Uploading...' });
+            const publicUrl = await uploadWatchImage(
+              imageUri,
+              `watch_${Date.now()}.jpg`,
+            );
             setImageUrl(publicUrl);
             setShowGallery(false);
-            Toast.show({
-              type: 'success',
-              text1: 'Uploaded',
-              text2: 'Image uploaded successfully!',
-            });
           } catch (error) {
             setImageUrl(imageUri);
             setShowGallery(false);
-            Toast.show({
-              type: 'info',
-              text1: 'Using Local Image',
-              text2: 'Could not upload to cloud, using local image instead.',
-            });
           }
         } else {
           setImageUrl(imageUri);
@@ -290,11 +222,10 @@ const AddWatchScreen = () => {
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'Please fill in Company Name and Model Number.',
+        text2: 'Please fill in Company and Model.',
       });
       return;
     }
-
     const watchData = {
       brand,
       name,
@@ -306,7 +237,6 @@ const AddWatchScreen = () => {
       description: description || 'No description provided.',
       image: imageUrl,
     };
-
     if (isEditMode) {
       await updateWatch(editWatchId, watchData);
       Toast.show({
@@ -328,11 +258,12 @@ const AddWatchScreen = () => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={THEME.background} />
-
-      {/* HEADER MATCHING DASHBOARD */}
-      <View style={[styles.headerRow, { alignItems: 'center', justifyContent: 'flex-start' }]}>
+      <View style={styles.headerRow}>
         {isEditMode && (
-          <TouchableOpacity style={[styles.iconButton, { marginRight: 16 }]} onPress={() => goBack()}>
+          <TouchableOpacity
+            style={[styles.iconButton, { marginRight: 16 }]}
+            onPress={() => goBack()}
+          >
             <Icon name="arrow-left" size={20} color={THEME.textDark} />
           </TouchableOpacity>
         )}
@@ -346,16 +277,19 @@ const AddWatchScreen = () => {
         contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.formContainer}>
-          {/* PHOTO UPLOAD SECTION */}
           <Animated.View style={[styles.uploadSection, getAnimStyle(1)]}>
             <View style={styles.dashedBox}>
               {isScanning ? (
                 <View style={styles.scannerWrapper}>
                   <View style={styles.scanTargetBox}>
-                    <Icon name="camera" size={32} color={THEME.textMuted} />
-                    <Text style={styles.scanningText}>
-                      Scanning timepiece...
-                    </Text>
+                    {/* <Icon name="camera" size={32} color={THEME.textMuted} /> */}
+                    <MaterialIcon
+                      name="camera-iris"
+                      size={44}
+                      color={THEME.textMuted}
+                      style={styles.btnIcon}
+                    />
+                    <Text style={styles.scanningText}>Opening Camera...</Text>
                   </View>
                 </View>
               ) : (
@@ -365,18 +299,18 @@ const AddWatchScreen = () => {
                       <Image
                         source={{ uri: imageUrl }}
                         style={styles.previewImage}
-                        resizeMode="cover"
+                        resizeMode="contain"
                       />
                     ) : (
-                      <Icon
-                        name="camera"
-                        size={32}
+                      // <Icon name="camera" size={32} color={THEME.textMuted} />
+                      <MaterialIcon
+                        name="camera-iris"
+                        size={44}
                         color={THEME.textMuted}
-                        style={styles.uploadIconBase}
+                        style={styles.btnIcon}
                       />
                     )}
                   </View>
-
                   <View style={styles.uploadActionsRow}>
                     <TouchableOpacity
                       style={styles.uploadButtonDark}
@@ -391,7 +325,6 @@ const AddWatchScreen = () => {
                       />
                       <Text style={styles.uploadButtonTextDark}>Gallery</Text>
                     </TouchableOpacity>
-
                     <TouchableOpacity
                       style={styles.uploadButtonLight}
                       activeOpacity={0.8}
@@ -410,10 +343,9 @@ const AddWatchScreen = () => {
               )}
             </View>
 
-            {/* GALLERY CHOOSER */}
             {showGallery && (
               <View style={styles.galleryChooser}>
-                <Text style={styles.galleryHeading}>PREMIUM PRESETS</Text>
+                <Text style={styles.galleryHeading}>PRESETS & LIBRARY</Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -431,18 +363,7 @@ const AddWatchScreen = () => {
                     onPress={handleBrowseDeviceLibrary}
                   >
                     <Icon name="folder" size={18} color={THEME.surface} />
-                    <Text
-                      style={{
-                        fontSize: 9,
-                        color: THEME.surface,
-                        fontWeight: '700',
-                        marginTop: 4,
-                      }}
-                    >
-                      DEVICE
-                    </Text>
                   </TouchableOpacity>
-
                   {PRESET_IMAGES.map((img, idx) => (
                     <TouchableOpacity
                       key={idx}
@@ -462,10 +383,6 @@ const AddWatchScreen = () => {
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
-
-                <Text style={[styles.galleryHeading, { marginTop: 16 }]}>
-                  CUSTOM IMAGE URL
-                </Text>
                 <View style={styles.urlInputRow}>
                   <TextInput
                     style={styles.urlInput}
@@ -491,12 +408,11 @@ const AddWatchScreen = () => {
             )}
           </Animated.View>
 
-          {/* FORM FIELDS */}
           <Animated.View style={getAnimStyle(2)}>
             <Text style={styles.label}>COMPANY NAME *</Text>
             <TextInput
               style={styles.input}
-              placeholder="e.g. Rolex, Omega"
+              placeholder="e.g. Rolex"
               placeholderTextColor={THEME.textMuted}
               value={brand}
               onChangeText={setBrand}
@@ -507,7 +423,7 @@ const AddWatchScreen = () => {
             <Text style={styles.label}>MODEL NUMBER *</Text>
             <TextInput
               style={styles.input}
-              placeholder="e.g. Submariner 116610"
+              placeholder="e.g. Submariner"
               placeholderTextColor={THEME.textMuted}
               value={name}
               onChangeText={setName}
@@ -518,7 +434,7 @@ const AddWatchScreen = () => {
             <Text style={styles.label}>PRICE (₹)</Text>
             <TextInput
               style={styles.input}
-              placeholder="Optional (e.g. 8500.00)"
+              placeholder="e.g. 8500.00"
               placeholderTextColor={THEME.textMuted}
               keyboardType="numeric"
               value={price}
@@ -537,7 +453,6 @@ const AddWatchScreen = () => {
             />
           </Animated.View>
 
-          {/* GENDER SEGMENTED CONTROL */}
           <Animated.View style={getAnimStyle(6)}>
             <Text style={styles.label}>GENDER</Text>
             <View style={styles.segmentedControl}>
@@ -549,7 +464,6 @@ const AddWatchScreen = () => {
                     gender === item && styles.segmentButtonActive,
                   ]}
                   onPress={() => setGender(item)}
-                  activeOpacity={0.9}
                 >
                   <Text
                     style={[
@@ -564,7 +478,6 @@ const AddWatchScreen = () => {
             </View>
           </Animated.View>
 
-          {/* STRAP DROPDOWN CHIPS */}
           <Animated.View style={getAnimStyle(7)}>
             <Text style={styles.label}>STRAP TYPE</Text>
             <View style={styles.chipsRow}>
@@ -590,7 +503,6 @@ const AddWatchScreen = () => {
             </View>
           </Animated.View>
 
-          {/* WATCH TYPE CHIPS */}
           <Animated.View style={getAnimStyle(8)}>
             <Text style={styles.label}>WATCH TYPE</Text>
             <View style={styles.chipsRow}>
@@ -629,7 +541,6 @@ const AddWatchScreen = () => {
             />
           </Animated.View>
 
-          {/* ACTIONS */}
           <Animated.View style={[styles.actionContainer, getAnimStyle(9)]}>
             <TouchableOpacity
               style={styles.saveButton}
@@ -639,7 +550,7 @@ const AddWatchScreen = () => {
               <Icon
                 name="check"
                 size={20}
-                color={THEME.surface}
+                color={THEME.textDark}
                 style={{ marginRight: 8 }}
               />
               <Text style={styles.saveButtonText}>
@@ -648,7 +559,6 @@ const AddWatchScreen = () => {
             </TouchableOpacity>
           </Animated.View>
         </View>
-
         <View style={{ height: 100 }} />
       </ScrollView>
       <Toast />
@@ -656,84 +566,61 @@ const AddWatchScreen = () => {
   );
 };
 
-// --- STYLES ALIGNED WITH DASHBOARD ---
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: THEME.background,
-  },
+  container: { flex: 1, backgroundColor: THEME.background },
   headerRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
     paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: 20,
   },
   heroText: {
-    fontSize: 28, // Increased emphasis
+    fontSize: 32,
     fontWeight: '400',
     color: THEME.textDark,
-    alignSelf: 'flex-start',
     letterSpacing: -0.5,
   },
   iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: THEME.surface,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  scrollContent: {
-    paddingBottom: 40,
-  },
-  heroSection: {
-    paddingHorizontal: 24,
-    marginBottom: 24,
-  },
-  formContainer: {
-    paddingHorizontal: 24,
-  },
-  uploadSection: {
-    marginBottom: 24,
-  },
+  scrollContent: { paddingBottom: 40 },
+  formContainer: { paddingHorizontal: 20 },
+  uploadSection: { marginBottom: 24 },
   dashedBox: {
-    borderRadius: 24,
+    borderRadius: 32,
     backgroundColor: THEME.surface,
     padding: 20,
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
     elevation: 2,
-    borderWidth: 2,
-    borderColor: 'transparent',
   },
   imagePreviewWrapper: {
     width: '100%',
     height: 180,
-    borderRadius: 16,
-    backgroundColor: THEME.imageBg,
+    borderRadius: 24,
+    backgroundColor: THEME.background,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
     marginBottom: 16,
   },
-  previewImage: {
-    width: '100%',
-    height: '100%',
-  },
-  uploadActionsRow: {
-    flexDirection: 'row',
-    width: '100%',
-    gap: 12,
-  },
+  previewImage: { width: '100%', height: '100%' },
+  uploadActionsRow: { flexDirection: 'row', width: '100%', gap: 12 },
   uploadButtonDark: {
     flex: 1,
     backgroundColor: THEME.primary,
@@ -741,7 +628,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 14,
-    borderRadius: 16,
+    borderRadius: 20,
   },
   uploadButtonTextDark: {
     color: THEME.surface,
@@ -750,21 +637,19 @@ const styles = StyleSheet.create({
   },
   uploadButtonLight: {
     flex: 1,
-    backgroundColor: THEME.imageBg,
+    backgroundColor: THEME.background,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 14,
-    borderRadius: 16,
+    borderRadius: 20,
   },
   uploadButtonTextLight: {
     color: THEME.primary,
     fontSize: 14,
     fontWeight: '600',
   },
-  btnIcon: {
-    marginRight: 6,
-  },
+  btnIcon: { marginRight: 6 },
   scannerWrapper: {
     width: '100%',
     height: 180,
@@ -774,23 +659,11 @@ const styles = StyleSheet.create({
   scanTargetBox: {
     width: '100%',
     height: '100%',
-    borderRadius: 16,
-    borderWidth: 2,
+    borderRadius: 24,
     borderColor: THEME.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
-    backgroundColor: THEME.imageBg,
-    overflow: 'hidden',
-  },
-  scanLine: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    height: 3,
-    backgroundColor: THEME.primary,
-    zIndex: 100,
+    backgroundColor: THEME.background,
   },
   scanningText: {
     fontSize: 13,
@@ -804,45 +677,35 @@ const styles = StyleSheet.create({
     padding: 20,
     marginTop: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
     elevation: 2,
   },
   galleryHeading: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: THEME.textMuted,
     letterSpacing: 1,
     marginBottom: 12,
   },
-  galleryScroll: {
-    gap: 12,
-  },
+  galleryScroll: { gap: 12 },
   galleryThumbWrapper: {
     width: 64,
     height: 64,
-    borderRadius: 12,
+    borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 2,
     borderColor: 'transparent',
-    backgroundColor: THEME.imageBg,
+    backgroundColor: THEME.background,
   },
-  galleryThumbWrapperActive: {
-    borderColor: THEME.primary,
-  },
-  galleryThumb: {
-    width: '100%',
-    height: '100%',
-  },
-  urlInputRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
+  galleryThumbWrapperActive: { borderColor: THEME.primary },
+  galleryThumb: { width: '100%', height: '100%' },
+  urlInputRow: { flexDirection: 'row', gap: 8, marginTop: 16 },
   urlInput: {
     flex: 1,
-    backgroundColor: THEME.imageBg,
-    borderRadius: 12,
+    backgroundColor: THEME.background,
+    borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 14,
@@ -850,7 +713,7 @@ const styles = StyleSheet.create({
   },
   urlApplyBtn: {
     backgroundColor: THEME.primary,
-    borderRadius: 12,
+    borderRadius: 16,
     paddingHorizontal: 16,
     justifyContent: 'center',
     alignItems: 'center',
@@ -858,14 +721,14 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 12,
     color: THEME.textMuted,
-    fontWeight: '700',
+    fontWeight: '600',
     letterSpacing: 1,
     marginBottom: 8,
     marginTop: 20,
   },
   input: {
     backgroundColor: THEME.surface,
-    borderRadius: 16,
+    borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 16,
     fontSize: 15,
@@ -879,7 +742,7 @@ const styles = StyleSheet.create({
   segmentedControl: {
     flexDirection: 'row',
     backgroundColor: THEME.surface,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -891,24 +754,12 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: 16,
   },
-  segmentButtonActive: {
-    backgroundColor: THEME.primary,
-  },
-  segmentText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: THEME.textMuted,
-  },
-  segmentTextActive: {
-    color: THEME.surface,
-  },
-  chipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
+  segmentButtonActive: { backgroundColor: THEME.primary },
+  segmentText: { fontSize: 14, fontWeight: '600', color: THEME.textMuted },
+  segmentTextActive: { color: THEME.surface },
+  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   chipButton: {
     paddingHorizontal: 20,
     paddingVertical: 12,
@@ -920,44 +771,25 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 1,
   },
-  chipButtonActive: {
-    backgroundColor: THEME.primary,
-  },
-  chipText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: THEME.textMuted,
-  },
-  chipTextActive: {
-    color: THEME.surface,
-    fontWeight: '600',
-  },
-  textArea: {
-    height: 120,
-    paddingTop: 16,
-  },
-  actionContainer: {
-    marginTop: 40,
-    marginBottom: 20,
-  },
+  chipButtonActive: { backgroundColor: THEME.primary },
+  chipText: { fontSize: 14, fontWeight: '500', color: THEME.textMuted },
+  chipTextActive: { color: THEME.surface, fontWeight: '600' },
+  textArea: { height: 120, paddingTop: 16 },
+  actionContainer: { marginTop: 40, marginBottom: 20 },
   saveButton: {
-    backgroundColor: THEME.primary,
+    backgroundColor: THEME.accentColor,
     flexDirection: 'row',
     paddingVertical: 18,
-    borderRadius: 20,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: THEME.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
     elevation: 4,
   },
-  saveButtonText: {
-    color: THEME.surface,
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  saveButtonText: { color: THEME.textDark, fontSize: 16, fontWeight: '600' },
 });
 
 export default AddWatchScreen;

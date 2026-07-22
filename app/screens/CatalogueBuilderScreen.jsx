@@ -12,114 +12,160 @@ import {
   Switch,
   Dimensions,
   Image,
-  Alert,
   ActivityIndicator,
-  Platform,
+  Modal,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import MaterialIcon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-toast-message';
+import { launchImageLibrary } from 'react-native-image-picker';
+import { uploadWatchImage } from '../supabase/watchService';
+import { isConfigured } from '../supabase/client';
 import { useApp } from '../context/AppContext';
+import TemplateCoverCanvas from '../components/TemplateCoverCanvas';
 
 const { width } = Dimensions.get('window');
+const CANVAS_WIDTH = width - 40;
+const CANVAS_HEIGHT = CANVAS_WIDTH * 1.414;
 
-// --- THEME CONSTANTS MATCHING DASHBOARD & ADD WATCH ---
+// --- THEME MATCHING NEW DESIGN SYSTEM ---
 const THEME = {
-  background: '#FAFAFA',
+  background: '#E6E6E6',
   surface: '#FFFFFF',
-  primary: '#000000ff',
-  textDark: '#232F2C',
-  textMuted: '#7E918C',
-  imageBg: '#E0EAE8',
+  primary: '#1C1C1E',
+  textDark: '#1C1C1E',
+  textLight: '#FFFFFF',
+  textMuted: '#8E8E93',
+  accentColor: '#F0FE67',
+  imageBg: '#FFFFFF',
 };
 
-const PRESET_IMAGES = [
-  'https://images.unsplash.com/photo-1523170335258-f5ed11844a49?q=80&w=600&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1547996160-81dfa63595aa?q=80&w=600&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1522312346375-d1a52e2b99b3?q=80&w=600&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1587836374828-4dbafa94cf0e?q=80&w=600&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1614162692292-7ac56d7f7f1e?q=80&w=600&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1508656937213-bea3594fa3df?q=80&w=600&auto=format&fit=crop',
-];
-
-// Predefined Premium Catalog Templates
 const CATALOG_TEMPLATES = [
-  { id: 'minimal', name: 'Minimal', description: 'Clean & modern layout', previewColor: '#F5F5F5' },
-  { id: 'luxury', name: 'Luxury', description: 'Elegant dark gold theme', previewColor: '#1A1A1A' },
-  { id: 'vintage', name: 'Vintage', description: 'Classic retro cream style', previewColor: '#E8D5B7' },
-  { id: 'modern', name: 'Modern', description: 'Bold red & navy contemporary', previewColor: '#2C3E50' },
-  { id: 'midnight_gold', name: 'Midnight Gold', description: 'Premium navy & gold luxury', previewColor: '#0A1118' },
-  { id: 'royal_minimalist', name: 'Royal Emerald', description: 'Emerald green serif layout', previewColor: '#FAFAF9' },
-  { id: 'rose_gold_edition', name: 'Rose Gold', description: 'Soft warm rose-gold premium', previewColor: '#FDFBF7' },
-];
-
-const ACCENT_COLORS = [
-  { name: 'Dark', value: '#121212' },
-  { name: 'Gold', value: '#D4AF37' },
-  { name: 'Emerald', value: '#0E3D26' },
-  { name: 'Rose Gold', value: '#B76E79' },
-  { name: 'Crimson', value: '#8B0000' },
-  { name: 'Vibrant Red', value: '#E74C3C' },
-];
-
-const BG_COLORS = [
-  { name: 'White', value: '#FFFFFF' },
-  { name: 'Luxury Dark', value: '#1A1A1A' },
-  { name: 'Midnight', value: '#0A1118' },
-  { name: 'Vintage Sand', value: '#E8D5B7' },
-  { name: 'Soft Gray', value: '#FAFAF9' },
-  { name: 'Warm Cream', value: '#FDFBF7' },
-];
-
-const FONTS = [
-  { label: 'Serif', value: 'serif' },
-  { label: 'Sans-Serif', value: 'sans-serif' },
-  { label: 'Monospace', value: 'monospace' },
-];
-
-const BORDERS = [
-  { label: 'None', value: 'none' },
-  { label: 'Solid', value: 'single' },
-  { label: 'Dotted', value: 'dotted' },
+  {
+    id: 'minimal',
+    name: 'Minimal',
+    text: 'MINIMAL',
+    previewColor: '#F5F5F5',
+    textColor: '#1C1C1E',
+  },
+  {
+    id: 'luxury',
+    name: 'Luxury',
+    text: 'LUXURY',
+    previewColor: '#1C1C1E',
+    textColor: '#D4AF37',
+  },
+  {
+    id: 'vintage',
+    name: 'Vintage',
+    text: 'VINTAGE',
+    previewColor: '#E8D5B7',
+    textColor: '#4A3C2A',
+  },
+  {
+    id: 'modern',
+    name: 'Modern',
+    text: 'MODERN',
+    previewColor: '#0A1118',
+    textColor: '#F0FE67',
+  },
+  {
+    id: 'classic',
+    name: 'Classic',
+    text: 'CLASSIC',
+    previewColor: '#4A3C2A',
+    textColor: '#FFFFFF',
+  },
 ];
 
 const TEMPLATE_DEFAULTS = {
-  minimal: { accentColor: '#121212', customBgColor: '#FFFFFF', fontFamily: 'sans-serif', borderType: 'none', coverTitle: 'B-WATCH', coverSubtitle: 'OFFICIAL CATALOGUE', watermarkText: 'B-WATCH' },
-  luxury: { accentColor: '#D4AF37', customBgColor: '#1A1A1A', fontFamily: 'serif', borderType: 'single', coverTitle: 'LUXURY COLLECTION', coverSubtitle: 'OFFICIAL CATALOGUE', watermarkText: 'LUXURY' },
-  vintage: { accentColor: '#4A3C2A', customBgColor: '#E8D5B7', fontFamily: 'serif', borderType: 'none', coverTitle: 'VINTAGE SELECTION', coverSubtitle: 'RETRO EDITION', watermarkText: 'VINTAGE' },
-  modern: { accentColor: '#E74C3C', customBgColor: '#2C3E50', fontFamily: 'sans-serif', borderType: 'none', coverTitle: 'MODERN CHRONO', coverSubtitle: 'CONTEMPORARY EDITION', watermarkText: 'MODERN' },
-  midnight_gold: { accentColor: '#D4AF37', customBgColor: '#0A1118', fontFamily: 'serif', borderType: 'single', coverTitle: 'MIDNIGHT GOLD', coverSubtitle: 'PREMIUM TIMEPIECES', watermarkText: 'MIDNIGHT' },
-  royal_minimalist: { accentColor: '#0E3D26', customBgColor: '#FAFAF9', fontFamily: 'serif', borderType: 'single', coverTitle: 'ROYAL MINIMALIST', coverSubtitle: 'EXQUISITE CRAFTSMANSHIP', watermarkText: 'ROYAL' },
-  rose_gold_edition: { accentColor: '#B76E79', customBgColor: '#FDFBF7', fontFamily: 'serif', borderType: 'none', coverTitle: 'ROSE GOLD', coverSubtitle: 'LIMITED ARCHIVE', watermarkText: 'ROSE GOLD' },
+  minimal: {
+    bgColor: '#F5F5F5',
+    accentColor: '#1C1C1E',
+    secondaryAccent: '#8E8E93',
+    subtitle: 'PREMIUM WATCH',
+    title: 'CATALOG',
+    tagline: 'Timepiece Collection',
+    year: '2025-2026',
+    website: 'WWW.YOURWEBSITE.COM',
+  },
+  luxury: {
+    bgColor: '#1C1C1E',
+    accentColor: '#D4AF37',
+    secondaryAccent: '#999999',
+    subtitle: 'LUXURY TIMEPIECE',
+    title: 'C O L L E C T I O N',
+    tagline: 'Exclusive Edition',
+    year: '2025-2026',
+    website: 'WWW.YOURWEBSITE.COM',
+  },
+  vintage: {
+    bgColor: '#E8D5B7',
+    accentColor: '#4A3C2A',
+    secondaryAccent: '#8B7355',
+    subtitle: 'VINTAGE WATCH',
+    title: 'CATALOG',
+    tagline: 'Retro Edition',
+    year: '2025-2026',
+    website: 'WWW.YOURWEBSITE.COM',
+  },
+  modern: {
+    bgColor: '#0A1118',
+    accentColor: '#F0FE67',
+    secondaryAccent: '#B0B0B0',
+    subtitle: 'MODERN TIME',
+    title: 'CATALOG',
+    tagline: 'Contemporary Series',
+    year: '2025-2026',
+    website: 'WWW.YOURWEBSITE.COM',
+  },
+  classic: {
+    bgColor: '#4A3C2A',
+    accentColor: '#FFFFFF',
+    secondaryAccent: '#C4B397',
+    subtitle: 'CLASSIC WATCH',
+    title: 'H E R I T A G E',
+    tagline: 'Heritage Collection',
+    year: '2025-2026',
+    website: 'WWW.YOURWEBSITE.COM',
+  },
 };
+
+const BG_PRESETS = [
+  '#222426',
+  '#0A1118',
+  '#1C1C1E',
+  '#4A3C2A',
+  '#E8D5B7',
+  '#F5F5F5',
+];
+const ACCENT_PRESETS = [
+  '#FFFFFF',
+  '#D4AF37',
+  '#F0FE67',
+  '#B76E79',
+  '#1C1C1E',
+  '#4A3C2A',
+];
 
 const CatalogueBuilderScreen = () => {
   const { params, watches, updateWatch, navigate, goBack } = useApp();
-
   const selectedWatchIds = params?.selectedWatchIds || [];
   const pdfMode = params?.pdfMode || 'single';
   const selectedWatches = watches.filter(w => selectedWatchIds.includes(w.id));
-  const watchId = params?.watchId || (watches.length > 0 ? watches[0].id : null);
+  const watchId =
+    params?.watchId || (watches.length > 0 ? watches[0].id : null);
   const watch = watches.find(w => w.id === watchId);
-  const targetWatches = selectedWatches.length > 0 ? selectedWatches : watch ? [watch] : [];
+  const targetWatches =
+    selectedWatches.length > 0 ? selectedWatches : watch ? [watch] : [];
 
-  // Track which watch is currently being edited (for multi-watch mode)
   const [currentWatchIndex, setCurrentWatchIndex] = useState(0);
   const currentWatch = targetWatches[currentWatchIndex] || null;
 
   const [showPrice, setShowPrice] = useState(true);
-  const [showLogo, setShowLogo] = useState(true);
   const [showDesc, setShowDesc] = useState(true);
   const [selectedTemplate, setSelectedTemplate] = useState('minimal');
 
-  const [accentColor, setAccentColor] = useState('#121212');
-  const [customBgColor, setCustomBgColor] = useState('#FFFFFF');
-  const [fontFamily, setFontFamily] = useState('sans-serif');
-  const [borderType, setBorderType] = useState('none');
-  const [coverTitle, setCoverTitle] = useState('B-WATCH');
-  const [coverSubtitle, setCoverSubtitle] = useState('OFFICIAL CATALOGUE');
-  const [watermarkText, setWatermarkText] = useState('B-WATCH');
-
+  // --- WATCH FIELDS ---
   const [brand, setBrand] = useState('');
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
@@ -130,11 +176,36 @@ const CatalogueBuilderScreen = () => {
   const [type, setType] = useState('');
   const [gender, setGender] = useState('');
 
-  const [showGallery, setShowGallery] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [showLivePreview, setShowLivePreview] = useState(true);
+  // --- TEMPLATE CANVAS STATE ---
+  const [templateBgColor, setTemplateBgColor] = useState('#F5F5F5');
+  const [templateAccentColor, setTemplateAccentColor] = useState('#1C1C1E');
+  const [templateSecondaryAccent, setTemplateSecondaryAccent] =
+    useState('#8E8E93');
+  const [templateContent, setTemplateContent] = useState({
+    subtitle: 'PREMIUM WATCH',
+    title: 'CATALOG',
+    brandName: '',
+    tagline: 'Timepiece Collection',
+    year: '2025-2026',
+    website: 'WWW.YOURWEBSITE.COM',
+  });
+  const [coverImage, setCoverImage] = useState(null);
 
-  // Load current watch data into form fields
+  // --- DETAILS PAGE STATE ---
+  const [detailsFontFamily, setDetailsFontFamily] = useState('sans-serif');
+  const [detailsFontSize, setDetailsFontSize] = useState('medium'); // small, medium, large
+  const [detailsImageScale, setDetailsImageScale] = useState(1.0); // 0.8, 1.0, 1.2
+  const [detailsCodePrefix, setDetailsCodePrefix] = useState('CODE: ');
+  const [detailsShowBrand, setDetailsShowBrand] = useState(true);
+  const [detailsFooterText, setDetailsFooterText] = useState('');
+
+  // --- EDITOR STATE ---
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [activeTextKey, setActiveTextKey] = useState(null);
+  const [tempText, setTempText] = useState('');
+
+  // Populate watch fields when current watch changes
   useEffect(() => {
     if (currentWatch) {
       setBrand(currentWatch.brand || '');
@@ -142,73 +213,72 @@ const CatalogueBuilderScreen = () => {
       setPrice(currentWatch.price || '');
       setDescription(currentWatch.description || '');
       setImageUrl(currentWatch.image || '');
-      setColor(currentWatch.color || 'Silver Dial');
+      setColor(currentWatch.color || 'Silver');
       setStrap(currentWatch.strap || 'Metal');
       setType(currentWatch.type || 'Analogue');
       setGender(currentWatch.gender || 'Men');
+      // Auto-set cover image and brand name from watch data
+      setCoverImage(currentWatch.image || null);
+      setTemplateContent(prev => ({
+        ...prev,
+        brandName: currentWatch.brand || 'Brand Name',
+      }));
     }
-  }, [currentWatchIndex, currentWatch?.id]);
+  }, [currentWatchIndex, currentWatch]);
 
+  // Apply template defaults when template selection changes
   useEffect(() => {
     const defaults = TEMPLATE_DEFAULTS[selectedTemplate];
     if (defaults) {
-      setAccentColor(defaults.accentColor);
-      setCustomBgColor(defaults.customBgColor);
-      setFontFamily(defaults.fontFamily);
-      setBorderType(defaults.borderType);
-      setCoverTitle(
-        targetWatches.length > 1
-          ? 'COLLECTION'
-          : brand
-          ? brand.toUpperCase()
-          : defaults.coverTitle,
-      );
-      setCoverSubtitle(defaults.coverSubtitle);
-      setWatermarkText(defaults.watermarkText);
+      setTemplateBgColor(defaults.bgColor);
+      setTemplateAccentColor(defaults.accentColor);
+      setTemplateSecondaryAccent(defaults.secondaryAccent);
+      setTemplateContent(prev => ({
+        ...prev,
+        subtitle: defaults.subtitle,
+        title: defaults.title,
+        brandName: brand || prev.brandName || 'Brand Name',
+        tagline: defaults.tagline,
+        year: defaults.year,
+        website: defaults.website,
+      }));
     }
-  }, [selectedTemplate, targetWatches.length, brand]);
+  }, [selectedTemplate, brand]);
 
-  const animValues = useRef([...Array(8)].map(() => new Animated.Value(0))).current;
+  // --- ANIMATIONS ---
+  const animValues = useRef(
+    [...Array(8)].map(() => new Animated.Value(0)),
+  ).current;
 
   useEffect(() => {
     const animations = animValues.map(anim =>
-      Animated.timing(anim, { toValue: 1, duration: 500, useNativeDriver: true }),
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
     );
     Animated.stagger(80, animations).start();
   }, [currentWatchIndex, animValues]);
 
   const getAnimStyle = index => ({
     opacity: animValues[index],
-    transform: [{ translateY: animValues[index].interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }],
+    transform: [
+      {
+        translateY: animValues[index].interpolate({
+          inputRange: [0, 1],
+          outputRange: [30, 0],
+        }),
+      },
+    ],
   });
 
-  const getDynamicPreviewStyle = () => {
-    const isDarkBg = ['#1A1A1A', '#0A1118'].includes(customBgColor);
-    const selectedFont = fontFamily === 'serif' ? (Platform.OS === 'ios' ? 'Georgia' : 'serif') : fontFamily === 'monospace' ? (Platform.OS === 'ios' ? 'Courier' : 'monospace') : 'System';
-    const textStyle = { fontFamily: selectedFont, color: isDarkBg ? '#FFFFFF' : '#000000' };
-    let borderStyle = {};
-    if (borderType === 'single') borderStyle = { borderWidth: 2, borderColor: accentColor };
-    else if (borderType === 'dotted') borderStyle = { borderWidth: 2, borderColor: accentColor, borderStyle: 'dotted' };
-    return { page: { backgroundColor: customBgColor, ...borderStyle }, text: textStyle, accentText: { ...textStyle, color: accentColor }, mutedText: { ...textStyle, color: isDarkBg ? '#CCCCCC' : '#666666' }, borderStyle, isDarkBg };
-  };
-
-  if (watches.length === 0) {
+  // --- EARLY RETURN ---
+  if (watches.length === 0 || !currentWatch) {
     return (
       <SafeAreaView style={styles.errorContainer}>
-        <Icon name="book" size={48} color={THEME.textMuted} />
-        <Text style={styles.errorText}>No watches in collection to build a catalogue.</Text>
-        <TouchableOpacity style={styles.errorButton} onPress={() => navigate('AddWatch')}>
-          <Text style={styles.errorButtonText}>Add a Watch First</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
-    );
-  }
-
-  if (!currentWatch) {
-    return (
-      <SafeAreaView style={styles.errorContainer}>
-        <Icon name="alert-triangle" size={48} color="#FF9800" />
-        <Text style={styles.errorText}>Selected timepiece details could not be found.</Text>
+        <Icon name="alert-triangle" size={48} color={THEME.textMuted} />
+        <Text style={styles.errorText}>Data not found.</Text>
         <TouchableOpacity style={styles.errorButton} onPress={() => goBack()}>
           <Text style={styles.errorButtonText}>Go Back</Text>
         </TouchableOpacity>
@@ -216,32 +286,101 @@ const CatalogueBuilderScreen = () => {
     );
   }
 
-  // Save current watch edits
+  // --- HANDLERS ---
   const handleSaveCurrentWatch = async () => {
     await updateWatch(currentWatch.id, {
-      brand, name, price, description, image: imageUrl, color, strap, type, gender,
+      brand,
+      name,
+      price,
+      description,
+      image: imageUrl,
+      color,
+      strap,
+      type,
+      gender,
     });
   };
 
-  // Save all watches and navigate to PDF preview
-  const handlePrint = async () => {
-    // Save current watch first
-    await handleSaveCurrentWatch();
-    
-    Toast.show({
-      type: 'success',
-      text1: 'Saved',
-      text2: `Watch "${name}" updated successfully!`,
+  const handleChangePhoto = () => {
+    launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, async response => {
+      if (response.didCancel) return;
+      if (response.assets && response.assets.length > 0) {
+        const imageUri = response.assets[0].uri;
+        if (isConfigured) {
+          try {
+            Toast.show({ type: 'info', text1: 'Uploading...' });
+            const publicUrl = await uploadWatchImage(
+              imageUri,
+              `watch_${Date.now()}.jpg`,
+            );
+            setImageUrl(publicUrl);
+          } catch (err) {
+            setImageUrl(imageUri);
+          }
+        } else {
+          setImageUrl(imageUri);
+        }
+      }
     });
+  };
 
+  const handleCanvasImagePick = () => {
+    launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, async response => {
+      if (response.didCancel) return;
+      if (response.assets && response.assets.length > 0) {
+        const imageUri = response.assets[0].uri;
+        if (isConfigured) {
+          try {
+            Toast.show({ type: 'info', text1: 'Uploading Cover...' });
+            const publicUrl = await uploadWatchImage(
+              imageUri,
+              `cover_${Date.now()}.jpg`,
+            );
+            setCoverImage(publicUrl);
+          } catch (err) {
+            setCoverImage(imageUri);
+          }
+        } else {
+          setCoverImage(imageUri);
+        }
+      }
+    });
+  };
+
+  const openTextEditor = key => {
+    setActiveTextKey(key);
+    setTempText(templateContent[key] || '');
+    setModalVisible(true);
+  };
+
+  const saveTextEdit = () => {
+    setTemplateContent(prev => ({ ...prev, [activeTextKey]: tempText }));
+    setModalVisible(false);
+  };
+
+  const handlePrint = async () => {
+    await handleSaveCurrentWatch();
     navigate('PDFPreview', {
       watchId: targetWatches.length > 0 ? targetWatches[0].id : watchId,
       selectedWatchIds: targetWatches.length > 1 ? selectedWatchIds : undefined,
-      pdfMode: pdfMode,
+      pdfMode,
       pdfConfig: {
-        showPrice, showLogo, showDesc, template: selectedTemplate,
-        accentColor, customBgColor, fontFamily, borderType,
-        coverTitle, coverSubtitle, watermarkText,
+        showPrice,
+        showDesc,
+        template: selectedTemplate,
+        // Template canvas data
+        templateBgColor,
+        templateAccentColor,
+        templateSecondaryAccent,
+        templateContent,
+        coverImage,
+        // Details customization
+        detailsFontFamily,
+        detailsFontSize,
+        detailsImageScale,
+        detailsCodePrefix,
+        detailsShowBrand,
+        detailsFooterText,
       },
     });
   };
@@ -251,53 +390,33 @@ const CatalogueBuilderScreen = () => {
     setIsDownloading(true);
     setTimeout(() => {
       setIsDownloading(false);
-      Toast.show({
-        type: 'success',
-        text1: 'Download Complete',
-        text2: `PDF Catalogue for "${brand} ${name}" downloaded successfully!`,
-      });
+      Toast.show({ type: 'success', text1: 'Downloaded' });
     }, 2000);
   };
 
-  // Navigate to next/previous watch in multi-watch mode
-  const goToNextWatch = async () => {
-    // Save current watch before moving
-    await handleSaveCurrentWatch();
-    if (currentWatchIndex < targetWatches.length - 1) {
-      setCurrentWatchIndex(currentWatchIndex + 1);
-    }
-  };
-
-  const goToPrevWatch = async () => {
-    // Save current watch before moving
-    await handleSaveCurrentWatch();
-    if (currentWatchIndex > 0) {
-      setCurrentWatchIndex(currentWatchIndex - 1);
-    }
-  };
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={THEME.background} />
-
-      {/* HEADER */}
       <View style={styles.headerRow}>
-        <Text style={styles.heroText}>
-          {targetWatches.length > 1 ? 'Edit Watches' : 'Catalogue Details'}
-        </Text>
+        <Text style={styles.heroText}>Builder</Text>
       </View>
 
-      {/* WATCH NAVIGATOR (Multi-watch mode) */}
       {targetWatches.length > 1 && (
         <View style={styles.watchNavigator}>
           <TouchableOpacity
-            style={[styles.navArrow, currentWatchIndex === 0 && styles.navArrowDisabled]}
-            onPress={goToPrevWatch}
+            style={[
+              styles.navArrow,
+              currentWatchIndex === 0 && styles.navArrowDisabled,
+            ]}
+            onPress={async () => {
+              await handleSaveCurrentWatch();
+              setCurrentWatchIndex(currentWatchIndex - 1);
+            }}
             disabled={currentWatchIndex === 0}
           >
-            <Icon name="chevron-left" size={20} color={currentWatchIndex === 0 ? THEME.textMuted : THEME.primary} />
+            <Icon name="chevron-left" size={20} color={THEME.primary} />
           </TouchableOpacity>
-          
           <View style={styles.watchIndicatorContainer}>
             <Text style={styles.watchIndicatorText}>
               {currentWatchIndex + 1} of {targetWatches.length}
@@ -305,275 +424,465 @@ const CatalogueBuilderScreen = () => {
             <Text style={styles.watchIndicatorName} numberOfLines={1}>
               {currentWatch.brand} - {currentWatch.name}
             </Text>
-            {/* Progress dots */}
-            <View style={styles.progressDots}>
-              {targetWatches.map((_, idx) => (
-                <View
-                  key={idx}
-                  style={[styles.progressDot, idx === currentWatchIndex && styles.progressDotActive]}
-                />
-              ))}
-            </View>
           </View>
-
           <TouchableOpacity
-            style={[styles.navArrow, currentWatchIndex === targetWatches.length - 1 && styles.navArrowDisabled]}
-            onPress={goToNextWatch}
+            style={[
+              styles.navArrow,
+              currentWatchIndex === targetWatches.length - 1 &&
+                styles.navArrowDisabled,
+            ]}
+            onPress={async () => {
+              await handleSaveCurrentWatch();
+              setCurrentWatchIndex(currentWatchIndex + 1);
+            }}
             disabled={currentWatchIndex === targetWatches.length - 1}
           >
-            <Icon name="chevron-right" size={20} color={currentWatchIndex === targetWatches.length - 1 ? THEME.textMuted : THEME.primary} />
+            <Icon name="chevron-right" size={20} color={THEME.primary} />
           </TouchableOpacity>
         </View>
       )}
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.formContainer}>
-          {/* TEMPLATE SELECTION */}
+          {/* TEMPLATE SELECTOR */}
           <Animated.View style={[styles.templateSection, getAnimStyle(0)]}>
             <Text style={styles.label}>CHOOSE TEMPLATE</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.templateScroll}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.templateScroll}
+            >
               {CATALOG_TEMPLATES.map(template => (
                 <TouchableOpacity
                   key={template.id}
-                  style={[styles.templateCard, selectedTemplate === template.id && styles.templateCardActive]}
+                  style={[
+                    styles.templateCard,
+                    selectedTemplate === template.id &&
+                      styles.templateCardActive,
+                  ]}
                   onPress={() => setSelectedTemplate(template.id)}
                 >
-                  <View style={[styles.templatePreview, { backgroundColor: template.previewColor }]} />
-                  <Text style={[styles.templateName, selectedTemplate === template.id && styles.templateNameActive]}>{template.name}</Text>
-                  <Text style={styles.templateDesc}>{template.description}</Text>
+                  {selectedTemplate === template.id && (
+                    <View style={styles.activeTickBadge}>
+                      <Icon name="check" size={10} color="#FFFFFF" />
+                    </View>
+                  )}
+                  <View
+                    style={[
+                      styles.templatePreview,
+                      { backgroundColor: template.previewColor },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.templatePreviewText,
+                        { color: template.textColor || '#fff' },
+                      ]}
+                    >
+                      {template.text}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
               ))}
             </ScrollView>
           </Animated.View>
 
-          {/* IMAGE PREVIEW AND EDIT */}
+          {/* WATCH IMAGE CARD */}
           <Animated.View style={[styles.cardContainer, getAnimStyle(1)]}>
-            <View style={styles.imageStage}>
+            <TouchableOpacity
+              style={styles.imageStage}
+              activeOpacity={0.9}
+              onPress={handleChangePhoto}
+            >
               {imageUrl ? (
-                <Image source={{ uri: imageUrl }} style={styles.watchImage} resizeMode="contain" />
+                <>
+                  <Image
+                    source={{ uri: imageUrl }}
+                    style={styles.watchImage}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.imageOverlay} />
+                  <View style={styles.changePhotoBadge}>
+                    <Icon
+                      name="camera"
+                      size={14}
+                      color={THEME.textDark}
+                      style={styles.changePhotoIcon}
+                    />
+                    <Text style={styles.changePhotoText}>Change Photo</Text>
+                  </View>
+                </>
               ) : (
-                <Icon name="image" size={32} color={THEME.textMuted} />
-              )}
-            </View>
-            <TouchableOpacity style={styles.editImageBtn} onPress={() => setShowGallery(!showGallery)}>
-              <Icon name="edit-2" size={14} color={THEME.surface} style={{ marginRight: 6 }} />
-              <Text style={styles.editImageBtnText}>Change Photo</Text>
-            </TouchableOpacity>
-            {showGallery && (
-              <View style={styles.galleryChooser}>
-                <Text style={styles.galleryHeading}>PREMIUM PRESETS</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.galleryScroll}>
-                  {PRESET_IMAGES.map((img, idx) => (
-                    <TouchableOpacity
-                      key={idx}
-                      style={[styles.galleryThumbWrapper, imageUrl === img && styles.galleryThumbWrapperActive]}
-                      onPress={() => { setImageUrl(img); setShowGallery(false); }}
-                    >
-                      <Image source={{ uri: img }} style={styles.galleryThumb} />
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
-          </Animated.View>
-
-          {/* EDIT FORM */}
-          <Animated.View style={getAnimStyle(2)}>
-            <Text style={styles.label}>BRAND NAME</Text>
-            <TextInput style={styles.input} value={brand} onChangeText={setBrand} placeholder="Brand Name" placeholderTextColor={THEME.textMuted} />
-            <Text style={styles.label}>MODEL NAME</Text>
-            <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Model Name" placeholderTextColor={THEME.textMuted} />
-            <Text style={styles.label}>PRICE (₹)</Text>
-            <TextInput style={styles.input} value={price} onChangeText={setPrice} keyboardType="numeric" placeholder="Price" placeholderTextColor={THEME.textMuted} />
-          </Animated.View>
-
-          {/* SPECIFICATIONS EDIT */}
-          <Animated.View style={getAnimStyle(3)}>
-            <Text style={styles.label}>DIAL COLOR</Text>
-            <TextInput style={styles.input} value={color} onChangeText={setColor} placeholder="Dial Color" placeholderTextColor={THEME.textMuted} />
-            <View style={styles.row}>
-              <View style={styles.halfCol}>
-                <Text style={styles.label}>STRAP</Text>
-                <TextInput style={styles.input} value={strap} onChangeText={setStrap} placeholder="Strap Type" placeholderTextColor={THEME.textMuted} />
-              </View>
-              <View style={styles.halfCol}>
-                <Text style={styles.label}>WATCH TYPE</Text>
-                <TextInput style={styles.input} value={type} onChangeText={setType} placeholder="Type" placeholderTextColor={THEME.textMuted} />
-              </View>
-            </View>
-            <Text style={styles.label}>GENDER</Text>
-            <TextInput style={styles.input} value={gender} onChangeText={setGender} placeholder="Gender (Men/Women)" placeholderTextColor={THEME.textMuted} />
-          </Animated.View>
-
-          <Animated.View style={getAnimStyle(4)}>
-            <Text style={styles.label}>DESCRIPTION</Text>
-            <TextInput style={[styles.input, styles.textArea]} value={description} onChangeText={setDescription} multiline textAlignVertical="top" placeholder="Description" placeholderTextColor={THEME.textMuted} />
-          </Animated.View>
-
-          {/* LIVE PREVIEW SECTION */}
-          <Animated.View style={[styles.cardContainer, { marginTop: 24 }, getAnimStyle(5)]}>
-            <TouchableOpacity style={styles.previewHeader} onPress={() => setShowLivePreview(!showLivePreview)}>
-              <View style={styles.previewHeaderLeft}>
-                <Icon name="eye" size={18} color={THEME.textDark} style={{ marginRight: 8 }} />
-                <Text style={styles.previewHeaderText}>Live PDF Preview</Text>
-              </View>
-              <Icon name={showLivePreview ? 'chevron-up' : 'chevron-down'} size={20} color={THEME.textMuted} />
-            </TouchableOpacity>
-            {showLivePreview && (() => {
-              const previewStyle = getDynamicPreviewStyle();
-              const miniGridItems = targetWatches.length > 1 ? [1, 2, 3] : [1];
-              return (
-                <View style={styles.previewContent}>
-                  <Text style={styles.miniPageLabel}>Page 1 (Cover)</Text>
-                  <View style={[styles.miniHeroPage, previewStyle.borderStyle]}>
-                    <Text style={[styles.miniHeroTitle, { fontFamily: previewStyle.text.fontFamily }]}>{name || 'Watch Name Here'}</Text>
-                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                      {imageUrl ? (
-                        <Image source={{ uri: imageUrl }} style={{ width: 100, height: 100 }} resizeMode="contain" />
-                      ) : (
-                        <Icon name="image" size={24} color="#555" />
-                      )}
-                    </View>
-                    <View style={styles.miniDescBox}>
-                      <Text style={{ color: '#FFF', fontSize: 6, fontWeight: '700', marginBottom: 4 }}>DESCRIPTION</Text>
-                      <Text style={{ color: '#999', fontSize: 5 }}>Brand: <Text style={{ color: '#FFF' }}>{brand}</Text></Text>
-                      <Text style={{ color: '#999', fontSize: 5 }}>Type: <Text style={{ color: '#FFF' }}>{type}</Text></Text>
-                    </View>
-                  </View>
-                  <Text style={[styles.miniPageLabel, { marginTop: 12 }]}>Page 2 (Grid Catalog)</Text>
-                  <View style={[styles.miniPage, previewStyle.page]}>
-                    <View style={[styles.miniGrid, targetWatches.length === 1 && { justifyContent: 'center' }]}>
-                      {miniGridItems.map((item, idx) => (
-                        <View key={idx} style={[styles.miniGridItem, targetWatches.length === 1 && { width: '80%' }]}>
-                          {imageUrl ? (
-                            <Image source={{ uri: imageUrl }} style={{ width: '100%', height: 40, marginBottom: 4 }} resizeMode="contain" />
-                          ) : (
-                            <View style={{ width: '100%', height: 40, backgroundColor: '#EEE', marginBottom: 4 }} />
-                          )}
-                          <Text style={[previewStyle.text, { fontSize: 6, fontWeight: '700', textAlign: 'center' }]}>{name || 'Product'}</Text>
-                          <Text style={[previewStyle.mutedText, { fontSize: 5, textAlign: 'center', marginBottom: 2 }]}>CODE: W_001</Text>
-                          {showPrice && (
-                            <Text style={[previewStyle.text, { fontSize: 6, fontWeight: '700', textAlign: 'center' }]}>₹{price || '0.00'}</Text>
-                          )}
-                        </View>
-                      ))}
-                    </View>
-                    <View style={[styles.miniFooter, { borderTopColor: previewStyle.isDarkBg ? '#333' : '#EAEAEA' }]}>
-                      <Text style={[previewStyle.mutedText, { fontSize: 5 }]}>{coverTitle} / {coverSubtitle}</Text>
-                    </View>
-                  </View>
+                <View style={styles.placeholderContainer}>
+                  <Icon
+                    name="camera"
+                    size={32}
+                    color={THEME.textMuted}
+                    style={styles.placeholderIcon}
+                  />
+                  <Text style={styles.placeholderText}>Tap to Add Photo</Text>
                 </View>
-              );
-            })()}
+              )}
+            </TouchableOpacity>
           </Animated.View>
 
-          {/* CATALOG CUSTOMIZATION */}
-          <Animated.View style={[styles.cardContainer, { marginTop: 24 }, getAnimStyle(5)]}>
-            <Text style={styles.settingsHeader}>CATALOG CUSTOMIZATION</Text>
-            <Text style={styles.customLabel}>ACCENT COLOR</Text>
-            <View style={styles.colorPickerContainer}>
-              {ACCENT_COLORS.map(c => (
-                <TouchableOpacity key={c.value} style={[styles.colorBubble, { backgroundColor: c.value }, accentColor === c.value && styles.colorBubbleActive]} onPress={() => setAccentColor(c.value)}>
-                  {accentColor === c.value && <Icon name="check" size={14} color={c.value === '#FFFFFF' ? '#000' : '#FFF'} />}
+          {/* BRAND & MODEL */}
+          <Animated.View style={getAnimStyle(2)}>
+            <Text style={styles.label}>BRAND & MODEL</Text>
+            <View style={styles.row}>
+              <TextInput
+                style={[styles.input, styles.halfCol]}
+                value={brand}
+                onChangeText={setBrand}
+                placeholder="Brand"
+                placeholderTextColor={THEME.textMuted}
+              />
+              <TextInput
+                style={[styles.input, styles.halfCol]}
+                value={name}
+                onChangeText={setName}
+                placeholder="Model"
+                placeholderTextColor={THEME.textMuted}
+              />
+            </View>
+            <Text style={styles.label}>PRICE (₹)</Text>
+            <TextInput
+              style={styles.input}
+              value={price}
+              onChangeText={setPrice}
+              keyboardType="numeric"
+              placeholder="Price"
+              placeholderTextColor={THEME.textMuted}
+            />
+          </Animated.View>
+
+          {/* LIVE COVER PAGE EDITOR */}
+          <Animated.View style={[styles.canvasSection, getAnimStyle(3)]}>
+            <Text style={styles.label}>COVER PAGE DESIGNER</Text>
+            <Text style={styles.canvasHint}>
+              Tap any text or image on the canvas to customize
+            </Text>
+            <View style={styles.canvasContainer}>
+              <TemplateCoverCanvas
+                bgColor={templateBgColor}
+                accentColor={templateAccentColor}
+                secondaryAccent={templateSecondaryAccent}
+                content={templateContent}
+                coverImage={coverImage}
+                editMode={true}
+                onTextEdit={openTextEditor}
+                onImagePick={handleCanvasImagePick}
+                canvasWidth={CANVAS_WIDTH}
+                canvasHeight={CANVAS_HEIGHT}
+              />
+            </View>
+          </Animated.View>
+
+          {/* COLOR CUSTOMIZATION */}
+          <Animated.View
+            style={[
+              styles.cardContainerBox,
+              styles.colorSection,
+              getAnimStyle(4),
+            ]}
+          >
+            <Text style={styles.settingsHeader}>DESIGN SETTINGS</Text>
+
+            <Text style={styles.colorLabel}>Background Color</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.colorRow}
+            >
+              {BG_PRESETS.map(c => (
+                <TouchableOpacity
+                  key={c}
+                  style={[
+                    styles.colorCircle,
+                    { backgroundColor: c },
+                    templateBgColor === c && styles.colorCircleActive,
+                  ]}
+                  onPress={() => setTemplateBgColor(c)}
+                />
+              ))}
+            </ScrollView>
+
+            <Text style={styles.colorLabel}>Accent Color</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.colorRow}
+            >
+              {ACCENT_PRESETS.map(c => (
+                <TouchableOpacity
+                  key={c}
+                  style={[
+                    styles.colorCircle,
+                    { backgroundColor: c },
+                    templateAccentColor === c && styles.colorCircleActive,
+                  ]}
+                  onPress={() => setTemplateAccentColor(c)}
+                />
+              ))}
+            </ScrollView>
+          </Animated.View>
+
+          {/* DETAILS PAGE CUSTOMIZATION */}
+          <Animated.View
+            style={[
+              styles.cardContainerBox,
+              { marginTop: 24 },
+              getAnimStyle(5),
+            ]}
+          >
+            <Text style={styles.settingsHeader}>DETAILS PAGE CUSTOMIZATION</Text>
+
+            <Text style={styles.customLabel}>FONT FAMILY</Text>
+            <View style={styles.selectorRow}>
+              {[
+                { label: 'Sans-Serif', value: 'sans-serif' },
+                { label: 'Serif', value: 'serif' },
+                { label: 'Monospace', value: 'monospace' },
+              ].map(item => (
+                <TouchableOpacity
+                  key={item.value}
+                  style={[
+                    styles.selectorButton,
+                    detailsFontFamily === item.value && styles.selectorButtonActive,
+                  ]}
+                  onPress={() => setDetailsFontFamily(item.value)}
+                >
+                  <Text
+                    style={[
+                      styles.selectorButtonText,
+                      detailsFontFamily === item.value && styles.selectorButtonTextActive,
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>
-            <Text style={styles.customLabel}>BACKGROUND COLOR</Text>
-            <View style={styles.colorPickerContainer}>
-              {BG_COLORS.map(c => (
-                <TouchableOpacity key={c.value} style={[styles.colorBubble, { backgroundColor: c.value, borderWidth: 1, borderColor: '#DDD' }, customBgColor === c.value && styles.colorBubbleActive]} onPress={() => setCustomBgColor(c.value)}>
-                  {customBgColor === c.value && <Icon name="check" size={14} color={['#FFFFFF', '#FAFAF9', '#FDFBF7', '#E8D5B7'].includes(c.value) ? '#000' : '#FFF'} />}
+
+            <Text style={styles.customLabel}>FONT SIZE</Text>
+            <View style={styles.selectorRow}>
+              {[
+                { label: 'Small', value: 'small' },
+                { label: 'Medium', value: 'medium' },
+                { label: 'Large', value: 'large' },
+              ].map(item => (
+                <TouchableOpacity
+                  key={item.value}
+                  style={[
+                    styles.selectorButton,
+                    detailsFontSize === item.value && styles.selectorButtonActive,
+                  ]}
+                  onPress={() => setDetailsFontSize(item.value)}
+                >
+                  <Text
+                    style={[
+                      styles.selectorButtonText,
+                      detailsFontSize === item.value && styles.selectorButtonTextActive,
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>
-            <Text style={styles.customLabel}>TYPOGRAPHY</Text>
-            <View style={styles.choiceGroup}>
-              {FONTS.map(f => (
-                <TouchableOpacity key={f.value} style={[styles.choiceButton, fontFamily === f.value && styles.choiceButtonActive]} onPress={() => setFontFamily(f.value)}>
-                  <Text style={[styles.choiceText, fontFamily === f.value && styles.choiceTextActive]}>{f.label}</Text>
+
+            <Text style={styles.customLabel}>IMAGE SIZE (SCALE)</Text>
+            <View style={styles.selectorRow}>
+              {[
+                { label: '80%', value: 0.8 },
+                { label: '100%', value: 1.0 },
+                { label: '120%', value: 1.2 },
+              ].map(item => (
+                <TouchableOpacity
+                  key={item.value}
+                  style={[
+                    styles.selectorButton,
+                    detailsImageScale === item.value && styles.selectorButtonActive,
+                  ]}
+                  onPress={() => setDetailsImageScale(item.value)}
+                >
+                  <Text
+                    style={[
+                      styles.selectorButtonText,
+                      detailsImageScale === item.value && styles.selectorButtonTextActive,
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>
-            <Text style={styles.customLabel}>PAGE BORDER STYLE</Text>
-            <View style={styles.choiceGroup}>
-              {BORDERS.map(b => (
-                <TouchableOpacity key={b.value} style={[styles.choiceButton, borderType === b.value && styles.choiceButtonActive]} onPress={() => setBorderType(b.value)}>
-                  <Text style={[styles.choiceText, borderType === b.value && styles.choiceTextActive]}>{b.label}</Text>
-                </TouchableOpacity>
-              ))}
+
+            <Text style={styles.customLabel}>CODE LABEL PREFIX</Text>
+            <TextInput
+              style={styles.customInput}
+              value={detailsCodePrefix}
+              onChangeText={setDetailsCodePrefix}
+              placeholder="e.g. CODE:"
+              placeholderTextColor={THEME.textMuted}
+            />
+
+            <Text style={styles.customLabel}>FOOTER CUSTOM TEXT</Text>
+            <TextInput
+              style={styles.customInput}
+              value={detailsFooterText}
+              onChangeText={setDetailsFooterText}
+              placeholder="e.g. Custom Footer Text"
+              placeholderTextColor={THEME.textMuted}
+            />
+
+            <View style={[styles.switchRow, { borderBottomWidth: 0, marginTop: 12 }]}>
+              <Text style={styles.settingText}>Show Brand Name</Text>
+              <Switch
+                value={detailsShowBrand}
+                onValueChange={setDetailsShowBrand}
+                thumbColor={THEME.surface}
+                trackColor={{ true: THEME.primary }}
+              />
             </View>
-            <Text style={styles.customLabel}>COVER PAGE TITLE</Text>
-            <TextInput style={styles.customInput} value={coverTitle} onChangeText={setCoverTitle} placeholder="e.g. EXCLUSIVE TIMEPIECES" placeholderTextColor={THEME.textMuted} />
-            <Text style={styles.customLabel}>COVER PAGE SUBTITLE</Text>
-            <TextInput style={styles.customInput} value={coverSubtitle} onChangeText={setCoverSubtitle} placeholder="e.g. OFFICIAL CATALOGUE" placeholderTextColor={THEME.textMuted} />
-            <Text style={styles.customLabel}>WATERMARK TEXT</Text>
-            <TextInput style={styles.customInput} value={watermarkText} onChangeText={setWatermarkText} placeholder="e.g. B-WATCH" placeholderTextColor={THEME.textMuted} />
           </Animated.View>
 
           {/* EXPORT CONFIGURATION */}
-          <Animated.View style={[styles.cardContainer, { marginTop: 24 }, getAnimStyle(6)]}>
+          <Animated.View
+            style={[
+              styles.cardContainerBox,
+              styles.exportSection,
+              getAnimStyle(6),
+            ]}
+          >
             <Text style={styles.settingsHeader}>EXPORT CONFIGURATION</Text>
             <View style={styles.switchRow}>
               <Text style={styles.settingText}>Show Price Tag</Text>
-              <Switch value={showPrice} onValueChange={setShowPrice} trackColor={{ true: THEME.primary, false: '#CCC' }} thumbColor={THEME.surface} />
+              <Switch
+                value={showPrice}
+                onValueChange={setShowPrice}
+                thumbColor={THEME.surface}
+                trackColor={{ true: THEME.primary }}
+              />
             </View>
-            <View style={styles.switchRow}>
-              <Text style={styles.settingText}>Include Brand Logo</Text>
-              <Switch value={showLogo} onValueChange={setShowLogo} trackColor={{ true: THEME.primary, false: '#CCC' }} thumbColor={THEME.surface} />
-            </View>
-            <View style={[styles.switchRow, { borderBottomWidth: 0 }]}>
+            <View style={[styles.switchRow, styles.switchRowLast]}>
               <Text style={styles.settingText}>Show Description Text</Text>
-              <Switch value={showDesc} onValueChange={setShowDesc} trackColor={{ true: THEME.primary, false: '#CCC' }} thumbColor={THEME.surface} />
+              <Switch
+                value={showDesc}
+                onValueChange={setShowDesc}
+                thumbColor={THEME.surface}
+                trackColor={{ true: THEME.primary }}
+              />
             </View>
           </Animated.View>
 
-          {/* BUTTON ACTIONS */}
+          {/* ACTION BUTTONS */}
           <Animated.View style={[styles.actionsWrapper, getAnimStyle(7)]}>
-            <TouchableOpacity style={styles.btnPrimary} onPress={handlePrint} activeOpacity={0.8}>
-              <Icon name="printer" color={THEME.surface} size={20} style={{ marginRight: 8 }} />
+            <TouchableOpacity
+              style={styles.btnPrimary}
+              onPress={handlePrint}
+              activeOpacity={0.8}
+            >
+              <Icon
+                name="printer"
+                color={THEME.textDark}
+                size={20}
+                style={styles.btnIcon}
+              />
               <Text style={styles.btnTextPrimary}>Print Preview (PDF)</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.btnSecondary} onPress={handleDownload} activeOpacity={0.8} disabled={isDownloading}>
+            <TouchableOpacity
+              style={styles.btnSecondary}
+              onPress={handleDownload}
+              activeOpacity={0.8}
+              disabled={isDownloading}
+            >
               {isDownloading ? (
                 <ActivityIndicator size="small" color={THEME.primary} />
               ) : (
                 <>
-                  <Icon name="download" color={THEME.primary} size={20} style={{ marginRight: 8 }} />
+                  <Icon
+                    name="download"
+                    color={THEME.surface}
+                    size={20}
+                    style={styles.btnIcon}
+                  />
                   <Text style={styles.btnTextSecondary}>Download PDF</Text>
                 </>
               )}
             </TouchableOpacity>
           </Animated.View>
         </View>
-        <View style={{ height: 120 }} />
+        <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* TEXT EDIT MODAL */}
+      <Modal visible={modalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Edit Text</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <Icon name="x" size={24} color={THEME.textDark} />
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={styles.modalInput}
+              value={tempText}
+              onChangeText={setTempText}
+              autoFocus
+              multiline={
+                activeTextKey === 'subtitle' || activeTextKey === 'title'
+              }
+            />
+            <TouchableOpacity
+              style={styles.modalSaveBtn}
+              onPress={saveTextEdit}
+            >
+              <Text style={styles.modalSaveBtnText}>Save Changes</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <Toast />
     </SafeAreaView>
   );
 };
 
-// --- STYLES ---
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: THEME.background },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 16, paddingBottom: 12 },
-  heroText: { fontSize: 28, fontWeight: '400', color: THEME.textDark, alignSelf: 'flex-start', letterSpacing: -0.5 },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  heroText: {
+    fontSize: 32,
+    fontWeight: '400',
+    color: THEME.textDark,
+    letterSpacing: -0.5,
+  },
   scrollContent: { paddingBottom: 40 },
-  formContainer: { paddingHorizontal: 24 },
-  
-  // Watch Navigator styles
+  formContainer: { paddingHorizontal: 20 },
   watchNavigator: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginHorizontal: 24,
+    padding: 12,
+    marginHorizontal: 20,
     marginBottom: 16,
     backgroundColor: THEME.surface,
-    borderRadius: 16,
+    borderRadius: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.02,
     shadowRadius: 4,
     elevation: 2,
   },
@@ -585,100 +894,333 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  navArrowDisabled: {
-    opacity: 0.5,
-  },
-  watchIndicatorContainer: {
-    flex: 1,
-    alignItems: 'center',
-    marginHorizontal: 12,
-  },
+  navArrowDisabled: { opacity: 0.3 },
+  watchIndicatorContainer: { flex: 1, alignItems: 'center' },
   watchIndicatorText: {
     fontSize: 12,
     fontWeight: '600',
     color: THEME.textMuted,
-    marginBottom: 4,
   },
   watchIndicatorName: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '600',
     color: THEME.textDark,
-    marginBottom: 8,
-    maxWidth: 200,
   },
-  progressDots: {
-    flexDirection: 'row',
-    gap: 6,
+  label: {
+    fontSize: 12,
+    color: THEME.textMuted,
+    fontWeight: '600',
+    letterSpacing: 1,
+    marginBottom: 10,
+    marginTop: 20,
   },
-  progressDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: THEME.imageBg,
+  input: {
+    backgroundColor: THEME.surface,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    fontSize: 15,
+    color: THEME.textDark,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  progressDotActive: {
-    backgroundColor: THEME.primary,
-    width: 20,
-  },
-  
-  label: { fontSize: 12, color: THEME.textMuted, fontWeight: '700', letterSpacing: 1, marginBottom: 8, marginTop: 20 },
-  input: { backgroundColor: THEME.surface, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 16, fontSize: 15, color: THEME.textDark, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.02, shadowRadius: 4, elevation: 1 },
   row: { flexDirection: 'row', gap: 12 },
   halfCol: { flex: 1 },
-  textArea: { height: 120, paddingTop: 16 },
-  cardContainer: { backgroundColor: THEME.surface, borderRadius: 24, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 10, elevation: 2 },
-  templateSection: { marginBottom: 8 },
+  cardContainer: {
+    backgroundColor: THEME.surface,
+    borderRadius: 32,
+    padding: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  cardContainerBox: {
+    backgroundColor: THEME.surface,
+    borderRadius: 32,
+    paddingVertical: 22,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  templateSection: { marginBottom: 12 },
   templateScroll: { gap: 12 },
-  templateCard: { width: 120, backgroundColor: THEME.surface, borderRadius: 16, padding: 12, borderWidth: 2, borderColor: 'transparent', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.02, shadowRadius: 4, elevation: 1 },
+  templateCard: {
+    width: 120,
+    backgroundColor: THEME.surface,
+    borderRadius: 24,
+    borderColor: 'transparent',
+    position: 'relative',
+    alignItems: 'center',
+    marginTop: 10,
+  },
   templateCardActive: { borderColor: THEME.primary },
-  templatePreview: { width: '100%', height: 60, borderRadius: 8, marginBottom: 8 },
-  templateName: { fontSize: 14, fontWeight: '600', color: THEME.textDark, marginBottom: 2 },
-  templateNameActive: { color: THEME.primary },
-  templateDesc: { fontSize: 10, color: THEME.textMuted },
-  imageStage: { width: '100%', height: 160, backgroundColor: THEME.imageBg, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  watchImage: { width: '90%', height: '90%' },
-  editImageBtn: { backgroundColor: THEME.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 16 },
-  editImageBtnText: { color: THEME.surface, fontSize: 13, fontWeight: '600' },
-  galleryChooser: { width: '100%', marginTop: 16, borderTopWidth: 1, borderColor: THEME.imageBg, paddingTop: 16 },
-  galleryHeading: { fontSize: 11, fontWeight: '700', color: THEME.textMuted, letterSpacing: 1, marginBottom: 12 },
-  galleryScroll: { gap: 12 },
-  galleryThumbWrapper: { width: 60, height: 60, borderRadius: 12, overflow: 'hidden', borderWidth: 2, borderColor: 'transparent', backgroundColor: THEME.imageBg },
-  galleryThumbWrapperActive: { borderColor: THEME.primary },
-  galleryThumb: { width: '100%', height: '100%' },
-  settingsHeader: { fontSize: 12, fontWeight: '700', color: THEME.textMuted, letterSpacing: 1, marginBottom: 12 },
-  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderColor: THEME.imageBg },
-  settingText: { fontSize: 14, fontWeight: '600', color: THEME.textDark },
-  actionsWrapper: { marginTop: 40, marginBottom: 20 },
-  btnPrimary: { backgroundColor: THEME.primary, flexDirection: 'row', paddingVertical: 18, borderRadius: 20, alignItems: 'center', justifyContent: 'center', shadowColor: THEME.primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 4, marginBottom: 16 },
-  btnTextPrimary: { color: THEME.surface, fontWeight: '700', fontSize: 15 },
-  btnSecondary: { backgroundColor: THEME.surface, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 18, borderRadius: 20, borderWidth: 2, borderColor: THEME.primary },
-  btnTextSecondary: { fontWeight: '700', fontSize: 15, color: THEME.primary },
-  errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: THEME.background, padding: 24 },
-  errorText: { fontSize: 16, color: THEME.textMuted, fontWeight: '600', marginTop: 16, marginBottom: 24, textAlign: 'center' },
-  errorButton: { backgroundColor: THEME.primary, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 16 },
-  errorButtonText: { color: THEME.surface, fontSize: 15, fontWeight: '700' },
-  previewHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 16, borderBottomWidth: 1, borderColor: THEME.imageBg },
-  previewHeaderLeft: { flexDirection: 'row', alignItems: 'center' },
-  miniPageLabel: { fontSize: 10, fontWeight: '700', color: THEME.textMuted, marginBottom: 8 },
-  miniHeroPage: { height: 180, backgroundColor: '#1A1A1A', borderRadius: 12, padding: 12, position: 'relative', overflow: 'hidden' },
-  miniHeroTitle: { color: '#FFF', fontSize: 14, fontWeight: '300' },
-  miniDescBox: { position: 'absolute', bottom: 12, right: 12, backgroundColor: '#222', padding: 8, width: 90, borderWidth: 1, borderColor: '#444' },
-  miniPage: { height: 180, backgroundColor: '#FAFAFA', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#EAEAEA' },
-  miniGrid: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', marginHorizontal: -2 },
-  miniGridItem: { width: '33.33%', padding: 4, alignItems: 'center' },
-  miniFooter: { marginTop: 'auto', paddingTop: 8, borderTopWidth: 1, alignItems: 'center' },
-  previewHeaderText: { fontSize: 15, fontWeight: '700', color: THEME.textDark },
-  previewContent: { marginTop: 16, gap: 12 },
-  customLabel: { fontSize: 11, fontWeight: '700', color: THEME.textMuted, marginBottom: 8, marginTop: 20, letterSpacing: 1 },
-  colorPickerContainer: { flexDirection: 'row', gap: 10, marginBottom: 8 },
-  colorBubble: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
-  colorBubbleActive: { borderWidth: 2, borderColor: THEME.primary },
-  choiceGroup: { flexDirection: 'row', gap: 10, marginBottom: 8 },
-  choiceButton: { flex: 1, paddingVertical: 12, backgroundColor: THEME.imageBg, borderRadius: 12, borderWidth: 2, borderColor: 'transparent', alignItems: 'center' },
-  choiceButtonActive: { backgroundColor: THEME.surface, borderColor: THEME.primary },
-  choiceText: { fontSize: 13, fontWeight: '600', color: THEME.textDark },
-  choiceTextActive: { color: THEME.primary },
-  customInput: { backgroundColor: THEME.imageBg, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 14, color: THEME.textDark, marginBottom: 4 },
+  templatePreview: {
+    width: '100%',
+    height: 60,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  templatePreviewText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 3,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    paddingLeft: 3,
+  },
+  activeTickBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#2ECC71',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+    zIndex: 100,
+  },
+  imageStage: {
+    width: '100%',
+    aspectRatio: 0.9,
+    backgroundColor: THEME.background,
+    borderRadius: 28,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  watchImage: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    top: 0,
+    left: 0,
+  },
+  imageOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '35%',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    zIndex: 2,
+  },
+  changePhotoBadge: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: THEME.accentColor,
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 3,
+  },
+  changePhotoIcon: { marginRight: 6 },
+  changePhotoText: {
+    color: THEME.textDark,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  placeholderContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeholderIcon: { marginBottom: 8 },
+  placeholderText: {
+    fontSize: 15,
+    color: THEME.textMuted,
+    fontWeight: '500',
+  },
+
+  // Canvas section
+  canvasSection: { marginTop: 24 },
+  canvasHint: {
+    fontSize: 13,
+    color: THEME.textMuted,
+    marginBottom: 16,
+    fontWeight: '400',
+  },
+  canvasContainer: {
+    alignItems: 'center',
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+
+  // Color customization
+  colorSection: { marginTop: 24 },
+  colorLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: THEME.textMuted,
+    marginBottom: 10,
+  },
+  colorRow: { flexDirection: 'row', marginBottom: 20 },
+  colorCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  colorCircleActive: {
+    borderWidth: 3,
+    borderColor: THEME.accentColor,
+  },
+
+  // Export config
+  exportSection: { marginTop: 24 },
+  settingsHeader: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: THEME.textMuted,
+    letterSpacing: 1,
+    marginBottom: 12,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderColor: THEME.background,
+  },
+  switchRowLast: { borderBottomWidth: 0 },
+  settingText: { fontSize: 15, fontWeight: '500', color: THEME.textDark },
+  actionsWrapper: { marginTop: 40, marginBottom: 20, gap: 12 },
+  btnPrimary: {
+    backgroundColor: THEME.accentColor,
+    flexDirection: 'row',
+    paddingVertical: 18,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  btnTextPrimary: { color: THEME.textDark, fontWeight: '600', fontSize: 16 },
+  btnSecondary: {
+    backgroundColor: THEME.primary,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 18,
+    borderRadius: 30,
+  },
+  btnTextSecondary: { fontWeight: '600', fontSize: 16, color: THEME.surface },
+  btnIcon: { marginRight: 8 },
+  bottomSpacer: { height: 120 },
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    backgroundColor: THEME.surface,
+    borderRadius: 24,
+    padding: 24,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: THEME.textDark },
+  modalInput: {
+    backgroundColor: THEME.background,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: THEME.textDark,
+    minHeight: 60,
+    marginBottom: 24,
+  },
+  modalSaveBtn: {
+    backgroundColor: THEME.primary,
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  modalSaveBtnText: { color: THEME.surface, fontSize: 16, fontWeight: '700' },
+
+  selectorRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  selectorButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    alignItems: 'center',
+    backgroundColor: THEME.surface,
+  },
+  selectorButtonActive: {
+    borderColor: THEME.primary,
+    backgroundColor: THEME.primary,
+  },
+  selectorButtonText: {
+    fontSize: 13,
+    color: THEME.textDark,
+    fontWeight: '600',
+  },
+  selectorButtonTextActive: {
+    color: THEME.surface,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: THEME.background,
+    padding: 24,
+  },
+  errorText: {
+    fontSize: 16,
+    color: THEME.textMuted,
+    fontWeight: '500',
+    marginTop: 16,
+    marginBottom: 24,
+  },
+  errorButton: {
+    backgroundColor: THEME.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 26,
+  },
+  errorButtonText: { color: THEME.surface, fontSize: 15, fontWeight: '600' },
 });
 
 export default CatalogueBuilderScreen;
