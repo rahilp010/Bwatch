@@ -21,9 +21,20 @@ import RNFS from 'react-native-fs';
 import Toast from 'react-native-toast-message';
 import { useApp } from '../context/AppContext';
 import TemplateCoverCanvas from '../components/TemplateCoverCanvas';
+import { getHighQualityImageUrl } from '../supabase/watchService';
+import { haptics } from '../utils/haptics';
+import TYPOGRAPHY, { TEXT_STYLES } from '../theme/typography';
+import { isTablet } from '../theme/responsive';
+import Skeleton from '../components/Skeleton';
 
 const { width } = Dimensions.get('window');
-const PAGE_WIDTH = width - 40;
+const getPageWidth = () => {
+  if (isTablet()) {
+    return 400;
+  }
+  return width - 40;
+};
+const PAGE_WIDTH = getPageWidth();
 const PAGE_HEIGHT = PAGE_WIDTH * 1.414;
 
 // --- THEME MATCHING NEW DESIGN SYSTEM ---
@@ -48,6 +59,7 @@ const chunkArray = (arr, size) =>
 
 const PDFPreviewScreen = () => {
   const { params, watches, goBack } = useApp();
+  const [imagesLoaded, setImagesLoaded] = useState({});
   const coverPageRefs = useRef([]);
   const contentPageRefs = useRef([]);
   const watchId = params?.watchId;
@@ -78,12 +90,17 @@ const PDFPreviewScreen = () => {
     coverImage: null,
   };
 
+  const selectedWatches = useMemo(
+    () => watches.filter(w => selectedWatchIds.includes(w.id)),
+    [watches, selectedWatchIds],
+  );
+
   const targetWatches =
-    selectedWatchIds.length > 0
-      ? watches.filter(w => selectedWatchIds.includes(w.id))
-      : watch
-      ? [watch]
-      : [];
+    selectedWatches.length > 0 ? selectedWatches : watch ? [watch] : [];
+  const allImagesLoaded =
+    Object.keys(imagesLoaded).length >= targetWatches.length &&
+    Object.values(imagesLoaded).every(Boolean);
+
   const watchChunks = chunkArray(targetWatches, 9);
 
   const coverPagesCount = pdfMode === 'separate' ? targetWatches.length : 1;
@@ -142,7 +159,7 @@ const PDFPreviewScreen = () => {
       '#222426',
       '#4A3C2A',
     ].includes(bg);
-    
+
     const selectedFont =
       pdfConfig.detailsFontFamily === 'serif'
         ? Platform.OS === 'ios'
@@ -164,7 +181,8 @@ const PDFPreviewScreen = () => {
       medium: { title: 20, code: 13, price: 18 },
       large: { title: 24, code: 15, price: 22 },
     };
-    const fontSize = fontSizes[pdfConfig.detailsFontSize || 'medium'] || fontSizes.medium;
+    const fontSize =
+      fontSizes[pdfConfig.detailsFontSize || 'medium'] || fontSizes.medium;
 
     return {
       page: { backgroundColor: bg },
@@ -188,6 +206,7 @@ const PDFPreviewScreen = () => {
   }
 
   const handleShare = async () => {
+    haptics.buttonPress();
     setIsSharing(true);
     try {
       if (pdfMode === 'separate' && targetWatches.length > 1) {
@@ -199,6 +218,7 @@ const PDFPreviewScreen = () => {
           type: 'application/pdf',
           title: 'Share Catalogues',
         });
+        haptics.success();
       } else {
         const filePath = await generateSinglePDF();
         await Share.open({
@@ -206,6 +226,7 @@ const PDFPreviewScreen = () => {
           type: 'application/pdf',
           title: 'Share Catalogue',
         });
+        haptics.success();
       }
     } catch (error) {
       if (error?.message?.includes('User did not share')) return;
@@ -300,6 +321,7 @@ const PDFPreviewScreen = () => {
   };
 
   const handleDownload = async () => {
+    haptics.buttonPress();
     setIsDownloading(true);
     try {
       if (pdfMode === 'separate' && targetWatches.length > 1) {
@@ -328,6 +350,7 @@ const PDFPreviewScreen = () => {
           saveToFiles: true,
           title: 'Save PDF Catalogue',
         });
+        haptics.success();
         Toast.show({
           type: 'success',
           text1: 'Saved',
@@ -353,15 +376,24 @@ const PDFPreviewScreen = () => {
       <View style={styles.headerRow}>
         <TouchableOpacity
           style={[styles.iconButton, { backgroundColor: THEME.surface }]}
-          onPress={() => goBack()}
+          onPress={() => {
+            haptics.buttonPress();
+            goBack();
+          }}
         >
           <Icon name="arrow-left" size={20} color={THEME.textDark} />
         </TouchableOpacity>
         <Text style={styles.heroText}>Preview</Text>
         <TouchableOpacity
-          style={[styles.iconButton, { backgroundColor: THEME.primary }]}
+          style={[
+            styles.iconButton,
+            {
+              backgroundColor: THEME.primary,
+              opacity: !allImagesLoaded || isSharing ? 0.5 : 1,
+            },
+          ]}
           onPress={handleShare}
-          disabled={isSharing}
+          disabled={isSharing || !allImagesLoaded}
         >
           {isSharing ? (
             <ActivityIndicator size="small" color={THEME.surface} />
@@ -396,7 +428,7 @@ const PDFPreviewScreen = () => {
                       title: item.name,
                       brandName: item.brand || 'Brand Name',
                     }}
-                    coverImage={item.image}
+                    coverImage={getHighQualityImageUrl(item.image)}
                     editMode={false}
                     canvasWidth={PAGE_WIDTH}
                     canvasHeight={PAGE_HEIGHT}
@@ -417,24 +449,72 @@ const PDFPreviewScreen = () => {
                     style={[styles.gridContent, styles.gridContentCentered]}
                   >
                     <View style={[styles.gridItem, styles.gridItemSingle]}>
-                      <Image
-                        source={{ uri: item.image }}
-                        style={[styles.gridItemImage, { transform: [{ scale: pdfConfig.detailsImageScale || 1.0 }] }]}
-                        resizeMode="contain"
-                      />
+                      <View style={styles.gridItemImageContainer}>
+                        <Image
+                          source={{ uri: getHighQualityImageUrl(item.image) }}
+                          style={[
+                            styles.gridItemImage,
+                            {
+                              transform: [
+                                { scale: pdfConfig.detailsImageScale || 1.0 },
+                              ],
+                            },
+                          ]}
+                          resizeMode="contain"
+                          onLoadEnd={() =>
+                            setImagesLoaded(prev => ({
+                              ...prev,
+                              [item.id]: true,
+                            }))
+                          }
+                          onLoadStart={() =>
+                            setImagesLoaded(prev => ({
+                              ...prev,
+                              [item.id]: false,
+                            }))
+                          }
+                        />
+                        {imagesLoaded[item.id] !== true && (
+                          <Skeleton
+                            width="100%"
+                            height="100%"
+                            style={StyleSheet.absoluteFillObject}
+                          />
+                        )}
+                      </View>
                       <Text
-                        style={[styles.gridItemName, style.text, { fontSize: style.fontSize.title }]}
+                        style={[
+                          styles.gridItemName,
+                          style.text,
+                          { fontSize: style.fontSize.title },
+                        ]}
                         numberOfLines={1}
                       >
-                        {pdfConfig.detailsShowBrand ? `${item.brand || 'Watch'} — ` : ''}{item.name}
+                        {pdfConfig.detailsShowBrand
+                          ? `${item.brand || 'Watch'} — `
+                          : ''}
+                        {item.name}
                       </Text>
-                      <Text style={[styles.gridItemCode, style.mutedText, { fontSize: style.fontSize.code }]}>
-                        {pdfConfig.detailsCodePrefix || 'CODE: '}{item.id.substring(0, 5)}
+                      <Text
+                        style={[
+                          styles.gridItemCode,
+                          style.mutedText,
+                          { fontSize: style.fontSize.code },
+                        ]}
+                      >
+                        {pdfConfig.detailsCodePrefix || 'CODE: '}
+                        {item.id.substring(0, 5)}
                       </Text>
                       {pdfConfig.showPrice && (
                         <>
                           <View style={styles.gridItemDivider} />
-                          <Text style={[styles.gridItemPrice, style.text, { fontSize: style.fontSize.price }]}>
+                          <Text
+                            style={[
+                              styles.gridItemPrice,
+                              style.text,
+                              { fontSize: style.fontSize.price },
+                            ]}
+                          >
                             ₹ {item.price}
                           </Text>
                         </>
@@ -443,7 +523,10 @@ const PDFPreviewScreen = () => {
                   </View>
                   <View style={styles.gridPageFooter}>
                     <Text style={[styles.gridFooterText, style.mutedText]}>
-                      {pdfConfig.detailsFooterText || pdfConfig.templateContent?.title || 'CATALOG'} — Page 2
+                      {pdfConfig.detailsFooterText ||
+                        pdfConfig.templateContent?.title ||
+                        'CATALOG'}{' '}
+                      — Page 2
                     </Text>
                   </View>
                 </View>
@@ -509,24 +592,72 @@ const PDFPreviewScreen = () => {
                           targetWatches.length === 2 && styles.gridItemDouble,
                         ]}
                       >
-                        <Image
-                          source={{ uri: item.image }}
-                          style={[styles.gridItemImage, { transform: [{ scale: pdfConfig.detailsImageScale || 1.0 }] }]}
-                          resizeMode="contain"
-                        />
+                        <View style={styles.gridItemImageContainer}>
+                          <Image
+                            source={{ uri: item.image }}
+                            style={[
+                              styles.gridItemImage,
+                              {
+                                transform: [
+                                  { scale: pdfConfig.detailsImageScale || 1.0 },
+                                ],
+                              },
+                            ]}
+                            resizeMode="contain"
+                            onLoadEnd={() =>
+                              setImagesLoaded(prev => ({
+                                ...prev,
+                                [item.id]: true,
+                              }))
+                            }
+                            onLoadStart={() =>
+                              setImagesLoaded(prev => ({
+                                ...prev,
+                                [item.id]: false,
+                              }))
+                            }
+                          />
+                          {imagesLoaded[item.id] !== true && (
+                            <Skeleton
+                              width="100%"
+                              height="100%"
+                              style={StyleSheet.absoluteFillObject}
+                            />
+                          )}
+                        </View>
                         <Text
-                          style={[styles.gridItemName, style.text, { fontSize: style.fontSize.title }]}
+                          style={[
+                            styles.gridItemName,
+                            style.text,
+                            { fontSize: style.fontSize.title },
+                          ]}
                           numberOfLines={1}
                         >
-                          {pdfConfig.detailsShowBrand ? `${item.brand || 'Watch'} — ` : ''}{item.name}
+                          {pdfConfig.detailsShowBrand
+                            ? `${item.brand || 'Watch'} — `
+                            : ''}
+                          {item.name}
                         </Text>
-                        <Text style={[styles.gridItemCode, style.mutedText, { fontSize: style.fontSize.code }]}>
-                          {pdfConfig.detailsCodePrefix || 'CODE: '}{item.id.substring(0, 5)}
+                        <Text
+                          style={[
+                            styles.gridItemCode,
+                            style.mutedText,
+                            { fontSize: style.fontSize.code },
+                          ]}
+                        >
+                          {pdfConfig.detailsCodePrefix || 'CODE: '}
+                          {item.id.substring(0, 5)}
                         </Text>
                         {pdfConfig.showPrice && (
                           <>
                             <View style={styles.gridItemDivider} />
-                            <Text style={[styles.gridItemPrice, style.text, { fontSize: style.fontSize.price }]}>
+                            <Text
+                              style={[
+                                styles.gridItemPrice,
+                                style.text,
+                                { fontSize: style.fontSize.price },
+                              ]}
+                            >
                               ₹ {item.price}
                             </Text>
                           </>
@@ -536,8 +667,10 @@ const PDFPreviewScreen = () => {
                   </View>
                   <View style={styles.gridPageFooter}>
                     <Text style={[styles.gridFooterText, style.mutedText]}>
-                      {pdfConfig.detailsFooterText || pdfConfig.templateContent?.title || 'CATALOG'} — Page{' '}
-                      {pageIndex + 2}
+                      {pdfConfig.detailsFooterText ||
+                        pdfConfig.templateContent?.title ||
+                        'CATALOG'}{' '}
+                      — Page {pageIndex + 2}
                     </Text>
                   </View>
                 </View>
@@ -549,9 +682,12 @@ const PDFPreviewScreen = () => {
       </ScrollView>
 
       <TouchableOpacity
-        style={styles.downloadFab}
+        style={[
+          styles.downloadFab,
+          { opacity: !allImagesLoaded || isDownloading ? 0.5 : 1 },
+        ]}
         onPress={handleDownload}
-        disabled={isDownloading}
+        disabled={isDownloading || !allImagesLoaded}
         activeOpacity={0.8}
       >
         {isDownloading ? (
@@ -599,10 +735,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: { paddingBottom: 40, alignItems: 'center' },
   heroText: {
-    fontSize: 32,
-    fontWeight: '400',
+    ...TEXT_STYLES.displayLarge,
+    fontWeight: TYPOGRAPHY.fontWeight.regular,
     color: THEME.textDark,
-    letterSpacing: -0.5,
   },
   pdfPage: {
     width: PAGE_WIDTH,
@@ -644,14 +779,26 @@ const styles = StyleSheet.create({
     marginHorizontal: '2%',
     transform: [{ scale: 1.05 }],
   },
-  gridItemImage: { width: '100%', height: 110, marginBottom: 12 },
+  gridItemImage: { width: '100%', height: '100%' },
+  gridItemImageContainer: {
+    width: 120,
+    height: 120,
+    marginBottom: 12,
+    alignSelf: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
   gridItemName: {
-    fontSize: 10,
-    fontWeight: '600',
+    ...TEXT_STYLES.bodySmall,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
     textAlign: 'center',
     marginBottom: 2,
   },
-  gridItemCode: { fontSize: 8, textAlign: 'center', marginBottom: 6 },
+  gridItemCode: {
+    ...TEXT_STYLES.captionMedium,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
   gridItemDivider: {
     width: 30,
     height: 1,
@@ -659,8 +806,8 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   gridItemPrice: {
-    fontSize: 11,
-    fontWeight: '600',
+    ...TEXT_STYLES.bodySmall,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
     textAlign: 'center',
     marginBottom: 6,
   },
@@ -670,7 +817,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#F0F0F2',
   },
-  gridFooterText: { fontSize: 8, letterSpacing: 0.5 },
+  gridFooterText: { ...TEXT_STYLES.captionMedium, letterSpacing: 0.5 },
   downloadFab: {
     position: 'absolute',
     bottom: 120,
@@ -704,8 +851,8 @@ const styles = StyleSheet.create({
     zIndex: 998,
   },
   downloadProgressText: {
-    fontSize: 12,
-    fontWeight: '600',
+    ...TEXT_STYLES.bodySmall,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
     color: THEME.textDark,
   },
   errorContainer: {
@@ -716,9 +863,9 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   errorText: {
-    fontSize: 16,
+    ...TEXT_STYLES.bodyLarge,
     color: THEME.textMuted,
-    fontWeight: '500',
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
     marginTop: 16,
     marginBottom: 24,
   },
@@ -728,7 +875,11 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 26,
   },
-  errorButtonText: { color: THEME.surface, fontSize: 15, fontWeight: '600' },
+  errorButtonText: {
+    color: THEME.surface,
+    ...TEXT_STYLES.bodyLarge,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+  },
 });
 
 export default PDFPreviewScreen;

@@ -1,5 +1,5 @@
 {
-  "name": "bwatch",
+  "name": "BWatch",
   "version": "1.0.4",
   "private": true,
   "scripts": {
@@ -19,6 +19,7 @@
     "react-native": "0.86.0",
     "react-native-fs": "^2.20.0",
     "react-native-gesture-handler": "^3.0.2",
+    "react-native-haptic-feedback": "^3.0.0",
     "react-native-image-picker": "^8.2.1",
     "react-native-linear-gradient": "^2.8.3",
     "react-native-safe-area-context": "^5.8.0",

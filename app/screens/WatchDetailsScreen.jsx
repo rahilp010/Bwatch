@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -10,13 +10,17 @@ import {
   SafeAreaView,
   StatusBar,
   Alert,
-  Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import Toast from 'react-native-toast-message';
 import { useApp } from '../context/AppContext';
+import { getOptimizedImageUrl } from '../supabase/watchService';
+import { haptics } from '../utils/haptics';
+import TYPOGRAPHY, { TEXT_STYLES } from '../theme/typography';
+import { isTablet, getFontScale } from '../theme/responsive';
+import Skeleton from '../components/Skeleton';
 
-const { width } = Dimensions.get('window');
+const scale = getFontScale();
 
 // --- THEME CONSTANTS MATCHING DESIGN SYSTEM ---
 const THEME = {
@@ -31,8 +35,9 @@ const THEME = {
 };
 
 const WatchDetailsScreen = () => {
-  const { params, watches, deleteWatch, toggleFavorite, goBack, navigate } =
+  const { params, watches, deleteWatch, toggleFavorite, goBack, navigate, loading } =
     useApp();
+  const [imgLoading, setImgLoading] = useState(true);
 
   const watchId = params?.watchId;
   const watch = watches.find(w => w.id === watchId);
@@ -75,28 +80,61 @@ const WatchDetailsScreen = () => {
     ]).start();
   }, [watchId]);
 
-  if (!watch) {
+  if (loading || !watch) {
     return (
-      <SafeAreaView style={styles.errorContainer}>
-        <Icon name="alert-triangle" size={48} color={THEME.textMuted} />
-        <Text style={styles.errorText}>Watch details could not be loaded.</Text>
-        <TouchableOpacity style={styles.errorButton} onPress={() => goBack()}>
-          <Text style={styles.errorButtonText}>Go Back</Text>
-        </TouchableOpacity>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor={THEME.background} />
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            style={[styles.iconButton, { backgroundColor: THEME.surface }]}
+            onPress={() => {
+              haptics.buttonPress();
+              goBack();
+            }}
+          >
+            <Icon name="arrow-left" size={20} color={THEME.textDark} />
+          </TouchableOpacity>
+          <Skeleton width={100} height={20} borderRadius={10} />
+          <View style={[styles.iconButton, { backgroundColor: 'transparent' }]} />
+        </View>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          <View style={styles.imageContainer}>
+            <Skeleton width="100%" height="100%" borderRadius={32} />
+          </View>
+          <View style={{ paddingHorizontal: isTablet() ? 0 : 20, alignSelf: 'center', width: isTablet() ? 640 : '100%' }}>
+            <Skeleton width="30%" height={16} style={{ marginBottom: 12 }} />
+            <Skeleton width="80%" height={32} style={{ marginBottom: 16 }} />
+            <Skeleton width="40%" height={24} style={{ marginBottom: 30 }} />
+            
+            <View style={[styles.specsContainer, { height: 180, overflow: 'hidden', padding: 12, gap: 12 }]}>
+              <View style={{ flexDirection: 'row', gap: 12, flex: 1 }}>
+                <Skeleton width="48%" height="100%" borderRadius={12} />
+                <Skeleton width="48%" height="100%" borderRadius={12} />
+              </View>
+            </View>
+            
+            <Skeleton width="100%" height={100} borderRadius={24} style={{ marginTop: 24 }} />
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
 
   const handleDelete = () => {
+    haptics.warning();
     Alert.alert(
       'Delete Timepiece',
       `Are you sure you want to remove the ${watch.brand} ${watch.name} from your collection?`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Cancel', style: 'cancel', onPress: () => haptics.buttonPress() },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
+            haptics.delete();
             await deleteWatch(watch.id);
             Toast.show({
               type: 'success',
@@ -118,7 +156,10 @@ const WatchDetailsScreen = () => {
       <View style={styles.headerRow}>
         <TouchableOpacity
           style={[styles.iconButton, { backgroundColor: THEME.surface }]}
-          onPress={() => goBack()}
+          onPress={() => {
+            haptics.buttonPress();
+            goBack();
+          }}
         >
           <Icon name="arrow-left" size={20} color={THEME.textDark} />
         </TouchableOpacity>
@@ -127,7 +168,10 @@ const WatchDetailsScreen = () => {
 
         <TouchableOpacity
           style={[styles.iconButton, { backgroundColor: THEME.primary }]}
-          onPress={() => toggleFavorite(watch.id)}
+          onPress={() => {
+            haptics.cardSelect();
+            toggleFavorite(watch.id);
+          }}
         >
           <Icon
             name="heart"
@@ -152,7 +196,19 @@ const WatchDetailsScreen = () => {
             },
           ]}
         >
-          <Image source={{ uri: watch.image }} style={styles.watchImage} />
+          <Image
+            source={{ uri: getOptimizedImageUrl(watch.image, 600, 85) }}
+            style={styles.watchImage}
+            onLoadStart={() => setImgLoading(true)}
+            onLoadEnd={() => setImgLoading(false)}
+          />
+          {imgLoading && (
+            <Skeleton
+              width="100%"
+              height="100%"
+              style={StyleSheet.absoluteFillObject}
+            />
+          )}
         </Animated.View>
 
         {/* TITLE & PRICE SECTION */}
@@ -265,14 +321,20 @@ const WatchDetailsScreen = () => {
 
         <TouchableOpacity
           style={styles.secondaryIconButton}
-          onPress={() => navigate('AddWatch', { watchId: watch.id })}
+          onPress={() => {
+            haptics.buttonPress();
+            navigate('AddWatch', { watchId: watch.id });
+          }}
         >
           <Icon name="edit" size={20} color={THEME.textDark} />
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.primaryButton}
-          onPress={() => navigate('CatalogueBuilder', { watchId: watch.id })}
+          onPress={() => {
+            haptics.buttonPress();
+            navigate('CatalogueBuilder', { watchId: watch.id });
+          }}
         >
           <Icon
             name="book-open"
@@ -303,15 +365,15 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   logoText: {
-    fontSize: 32,
-    fontWeight: '400',
+    ...TEXT_STYLES.displayLarge,
+    fontWeight: TYPOGRAPHY.fontWeight.regular,
     color: THEME.textDark,
-    letterSpacing: -0.5,
   },
   iconButton: {
     width: 52,
     height: 52,
     borderRadius: 26,
+    backgroundColor: THEME.surface,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -324,6 +386,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 40,
     paddingTop: 12,
+    width: isTablet() ? 640 : '100%',
+    alignSelf: 'center',
   },
   imageContainer: {
     backgroundColor: THEME.imageBg,
@@ -346,9 +410,9 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   brandSubtitle: {
-    fontSize: 14,
+    ...TEXT_STYLES.bodyMedium,
     color: THEME.textMuted,
-    fontWeight: '500',
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
     textTransform: 'uppercase',
     marginBottom: 6,
   },
@@ -358,16 +422,15 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   mainTitle: {
-    fontSize: 32,
-    fontWeight: '500',
+    ...TEXT_STYLES.displayLarge,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
     color: THEME.textDark,
     flex: 1,
     marginRight: 10,
-    letterSpacing: -0.5,
   },
   price: {
-    fontSize: 24,
-    fontWeight: '700',
+    ...TEXT_STYLES.displaySmall,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
     color: THEME.textDark,
     marginTop: 4,
   },
@@ -398,15 +461,15 @@ const styles = StyleSheet.create({
     borderBottomColor: THEME.background,
   },
   specLabel: {
-    fontSize: 12,
+    ...TEXT_STYLES.bodySmall,
     color: THEME.textMuted,
-    fontWeight: '500',
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
     letterSpacing: 0.5,
     marginBottom: 6,
   },
   specValue: {
-    fontSize: 15,
-    fontWeight: '600',
+    ...TEXT_STYLES.bodyLarge,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
     color: THEME.textDark,
   },
   colorWrapper: {
@@ -424,16 +487,16 @@ const styles = StyleSheet.create({
     marginTop: 32,
   },
   sectionHeading: {
-    fontSize: 18,
+    ...TEXT_STYLES.headingMedium,
     color: THEME.textDark,
-    fontWeight: '500',
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
     marginBottom: 12,
   },
   descText: {
-    fontSize: 15,
+    ...TEXT_STYLES.bodyLarge,
     color: THEME.textMuted,
-    lineHeight: 24,
-    fontWeight: '400',
+    lineHeight: Math.round(24 * scale),
+    fontWeight: TYPOGRAPHY.fontWeight.regular,
   },
   featuresRow: {
     flexDirection: 'row',
@@ -454,16 +517,18 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   featureText: {
-    fontSize: 12,
-    fontWeight: '500',
+    ...TEXT_STYLES.bodySmall,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
     color: THEME.textDark,
     marginTop: 10,
   },
   bottomBar: {
     position: 'absolute',
     bottom: 105,
-    left: 20,
-    right: 20,
+    left: isTablet() ? undefined : 20,
+    right: isTablet() ? undefined : 20,
+    width: isTablet() ? 600 : undefined,
+    alignSelf: 'center',
     flexDirection: 'row',
     padding: 12,
     backgroundColor: THEME.surface,
@@ -504,8 +569,8 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: THEME.textDark,
-    fontSize: 16,
-    fontWeight: '600',
+    ...TEXT_STYLES.bodyLarge,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
   },
   errorContainer: {
     flex: 1,
@@ -515,9 +580,9 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   errorText: {
-    fontSize: 16,
+    ...TEXT_STYLES.bodyLarge,
     color: THEME.textMuted,
-    fontWeight: '500',
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
     marginTop: 16,
     marginBottom: 24,
   },
@@ -529,8 +594,8 @@ const styles = StyleSheet.create({
   },
   errorButtonText: {
     color: THEME.surface,
-    fontSize: 15,
-    fontWeight: '600',
+    ...TEXT_STYLES.bodyLarge,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
   },
 });
 

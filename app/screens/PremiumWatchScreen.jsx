@@ -7,13 +7,15 @@ import {
   TouchableOpacity,
   Animated,
   StatusBar,
-  Dimensions,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Feather';
 import hero from '../assets/hero.png';
+import { haptics } from '../utils/haptics';
+import TYPOGRAPHY, { TEXT_STYLES } from '../theme/typography';
+import { getFontScale } from '../theme/responsive';
 
-const { width, height } = Dimensions.get('window');
+const scale = getFontScale();
 
 // Keep background dark to fit splash/image aesthetic, but match button/font styling to the system
 const PremiumWatchScreen = ({ navigation }) => {
@@ -120,7 +122,10 @@ const PremiumWatchScreen = ({ navigation }) => {
           <TouchableOpacity
             style={styles.button}
             activeOpacity={0.9}
-            onPress={() => navigation.navigate('Dashboard')}
+            onPress={() => {
+              haptics.buttonPress();
+              navigation.navigate('Dashboard');
+            }}
           >
             <Text style={styles.buttonText}>Explore Timepieces</Text>
             <Icon
@@ -159,27 +164,26 @@ const styles = StyleSheet.create({
   },
   textSection: { alignItems: 'center', marginBottom: 40 },
   titlePrimary: {
-    fontSize: 40,
+    fontSize: Math.round(40 * scale),
     color: '#FFFFFF',
-    fontWeight: '400',
+    fontWeight: TYPOGRAPHY.fontWeight.regular,
     textAlign: 'center',
     letterSpacing: -0.5,
   },
   titleSecondary: {
-    fontSize: 40,
+    fontSize: Math.round(40 * scale),
     color: '#F0FE67',
-    fontWeight: '400',
+    fontWeight: TYPOGRAPHY.fontWeight.regular,
     textAlign: 'center',
     marginTop: -5,
     letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 15,
+    ...TEXT_STYLES.bodyLarge,
     color: '#8E8E93',
     textAlign: 'center',
     marginTop: 16,
-    lineHeight: 22,
-    fontWeight: '400',
+    lineHeight: Math.round(22 * scale),
   },
   buttonWrapper: { width: '100%', alignItems: 'center' },
   button: {
@@ -198,8 +202,8 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#1C1C1E',
-    fontSize: 16,
-    fontWeight: '600',
+    ...TEXT_STYLES.bodyLarge,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
     letterSpacing: 0.3,
   },
   buttonIcon: { marginLeft: 10, marginTop: 2 },

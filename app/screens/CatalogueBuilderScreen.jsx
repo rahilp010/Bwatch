@@ -22,9 +22,19 @@ import { uploadWatchImage } from '../supabase/watchService';
 import { isConfigured } from '../supabase/client';
 import { useApp } from '../context/AppContext';
 import TemplateCoverCanvas from '../components/TemplateCoverCanvas';
+import { haptics } from '../utils/haptics';
+import TYPOGRAPHY, { TEXT_STYLES } from '../theme/typography';
+import { isTablet } from '../theme/responsive';
+import Skeleton from '../components/Skeleton';
 
 const { width } = Dimensions.get('window');
-const CANVAS_WIDTH = width - 40;
+const getCanvasWidth = () => {
+  if (isTablet()) {
+    return 400;
+  }
+  return width - 40;
+};
+const CANVAS_WIDTH = getCanvasWidth();
 const CANVAS_HEIGHT = CANVAS_WIDTH * 1.414;
 
 // --- THEME MATCHING NEW DESIGN SYSTEM ---
@@ -148,7 +158,8 @@ const ACCENT_PRESETS = [
 ];
 
 const CatalogueBuilderScreen = () => {
-  const { params, watches, updateWatch, navigate, goBack } = useApp();
+  const { params, watches, updateWatch, navigate, goBack, loading } = useApp();
+  const [imgLoading, setImgLoading] = useState(true);
   const selectedWatchIds = params?.selectedWatchIds || [];
   const pdfMode = params?.pdfMode || 'single';
   const selectedWatches = watches.filter(w => selectedWatchIds.includes(w.id));
@@ -274,6 +285,30 @@ const CatalogueBuilderScreen = () => {
   });
 
   // --- EARLY RETURN ---
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor={THEME.background} />
+        <View style={styles.headerRow}>
+          <Skeleton width={180} height={32} borderRadius={8} />
+          <Skeleton width={40} height={40} borderRadius={20} />
+        </View>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          <View style={styles.formContainer}>
+            <Skeleton width="100%" height={64} borderRadius={24} style={{ marginBottom: 16 }} />
+            <Skeleton width={120} height={16} style={{ marginBottom: 12 }} />
+            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
+              <Skeleton width={100} height={140} borderRadius={16} />
+              <Skeleton width={100} height={140} borderRadius={16} />
+              <Skeleton width={100} height={140} borderRadius={16} />
+            </View>
+            <Skeleton width={CANVAS_WIDTH} height={CANVAS_HEIGHT} borderRadius={24} style={{ alignSelf: 'center', marginBottom: 24 }} />
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   if (watches.length === 0 || !currentWatch) {
     return (
       <SafeAreaView style={styles.errorContainer}>
@@ -302,6 +337,7 @@ const CatalogueBuilderScreen = () => {
   };
 
   const handleChangePhoto = () => {
+    haptics.buttonPress();
     launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, async response => {
       if (response.didCancel) return;
       if (response.assets && response.assets.length > 0) {
@@ -325,6 +361,7 @@ const CatalogueBuilderScreen = () => {
   };
 
   const handleCanvasImagePick = () => {
+    haptics.buttonPress();
     launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, async response => {
       if (response.didCancel) return;
       if (response.assets && response.assets.length > 0) {
@@ -348,17 +385,21 @@ const CatalogueBuilderScreen = () => {
   };
 
   const openTextEditor = key => {
+    haptics.modalOpen();
     setActiveTextKey(key);
+    setTemplateContent(prev => ({ ...prev, [key]: prev[key] || '' }));
     setTempText(templateContent[key] || '');
     setModalVisible(true);
   };
 
   const saveTextEdit = () => {
+    haptics.save();
     setTemplateContent(prev => ({ ...prev, [activeTextKey]: tempText }));
     setModalVisible(false);
   };
 
   const handlePrint = async () => {
+    haptics.buttonPress();
     await handleSaveCurrentWatch();
     navigate('PDFPreview', {
       watchId: targetWatches.length > 0 ? targetWatches[0].id : watchId,
@@ -386,10 +427,12 @@ const CatalogueBuilderScreen = () => {
   };
 
   const handleDownload = async () => {
+    haptics.buttonPress();
     await handleSaveCurrentWatch();
     setIsDownloading(true);
     setTimeout(() => {
       setIsDownloading(false);
+      haptics.success();
       Toast.show({ type: 'success', text1: 'Downloaded' });
     }, 2000);
   };
@@ -410,6 +453,7 @@ const CatalogueBuilderScreen = () => {
               currentWatchIndex === 0 && styles.navArrowDisabled,
             ]}
             onPress={async () => {
+              haptics.buttonPress();
               await handleSaveCurrentWatch();
               setCurrentWatchIndex(currentWatchIndex - 1);
             }}
@@ -432,6 +476,7 @@ const CatalogueBuilderScreen = () => {
                 styles.navArrowDisabled,
             ]}
             onPress={async () => {
+              haptics.buttonPress();
               await handleSaveCurrentWatch();
               setCurrentWatchIndex(currentWatchIndex + 1);
             }}
@@ -463,7 +508,10 @@ const CatalogueBuilderScreen = () => {
                     selectedTemplate === template.id &&
                       styles.templateCardActive,
                   ]}
-                  onPress={() => setSelectedTemplate(template.id)}
+                  onPress={() => {
+                    haptics.cardSelect();
+                    setSelectedTemplate(template.id);
+                  }}
                 >
                   {selectedTemplate === template.id && (
                     <View style={styles.activeTickBadge}>
@@ -503,7 +551,16 @@ const CatalogueBuilderScreen = () => {
                     source={{ uri: imageUrl }}
                     style={styles.watchImage}
                     resizeMode="cover"
+                    onLoadStart={() => setImgLoading(true)}
+                    onLoadEnd={() => setImgLoading(false)}
                   />
+                  {imgLoading && (
+                    <Skeleton
+                      width="100%"
+                      height="100%"
+                      style={StyleSheet.absoluteFillObject}
+                    />
+                  )}
                   <View style={styles.imageOverlay} />
                   <View style={styles.changePhotoBadge}>
                     <Icon
@@ -605,7 +662,10 @@ const CatalogueBuilderScreen = () => {
                     { backgroundColor: c },
                     templateBgColor === c && styles.colorCircleActive,
                   ]}
-                  onPress={() => setTemplateBgColor(c)}
+                  onPress={() => {
+                    haptics.buttonPress();
+                    setTemplateBgColor(c);
+                  }}
                 />
               ))}
             </ScrollView>
@@ -624,7 +684,10 @@ const CatalogueBuilderScreen = () => {
                     { backgroundColor: c },
                     templateAccentColor === c && styles.colorCircleActive,
                   ]}
-                  onPress={() => setTemplateAccentColor(c)}
+                  onPress={() => {
+                    haptics.buttonPress();
+                    setTemplateAccentColor(c);
+                  }}
                 />
               ))}
             </ScrollView>
@@ -653,7 +716,10 @@ const CatalogueBuilderScreen = () => {
                     styles.selectorButton,
                     detailsFontFamily === item.value && styles.selectorButtonActive,
                   ]}
-                  onPress={() => setDetailsFontFamily(item.value)}
+                  onPress={() => {
+                    haptics.buttonPress();
+                    setDetailsFontFamily(item.value);
+                  }}
                 >
                   <Text
                     style={[
@@ -680,7 +746,10 @@ const CatalogueBuilderScreen = () => {
                     styles.selectorButton,
                     detailsFontSize === item.value && styles.selectorButtonActive,
                   ]}
-                  onPress={() => setDetailsFontSize(item.value)}
+                  onPress={() => {
+                    haptics.buttonPress();
+                    setDetailsFontSize(item.value);
+                  }}
                 >
                   <Text
                     style={[
@@ -707,7 +776,10 @@ const CatalogueBuilderScreen = () => {
                     styles.selectorButton,
                     detailsImageScale === item.value && styles.selectorButtonActive,
                   ]}
-                  onPress={() => setDetailsImageScale(item.value)}
+                  onPress={() => {
+                    haptics.buttonPress();
+                    setDetailsImageScale(item.value);
+                  }}
                 >
                   <Text
                     style={[
@@ -743,7 +815,10 @@ const CatalogueBuilderScreen = () => {
               <Text style={styles.settingText}>Show Brand Name</Text>
               <Switch
                 value={detailsShowBrand}
-                onValueChange={setDetailsShowBrand}
+                onValueChange={val => {
+                  haptics.buttonPress();
+                  setDetailsShowBrand(val);
+                }}
                 thumbColor={THEME.surface}
                 trackColor={{ true: THEME.primary }}
               />
@@ -763,7 +838,10 @@ const CatalogueBuilderScreen = () => {
               <Text style={styles.settingText}>Show Price Tag</Text>
               <Switch
                 value={showPrice}
-                onValueChange={setShowPrice}
+                onValueChange={val => {
+                  haptics.buttonPress();
+                  setShowPrice(val);
+                }}
                 thumbColor={THEME.surface}
                 trackColor={{ true: THEME.primary }}
               />
@@ -772,7 +850,10 @@ const CatalogueBuilderScreen = () => {
               <Text style={styles.settingText}>Show Description Text</Text>
               <Switch
                 value={showDesc}
-                onValueChange={setShowDesc}
+                onValueChange={val => {
+                  haptics.buttonPress();
+                  setShowDesc(val);
+                }}
                 thumbColor={THEME.surface}
                 trackColor={{ true: THEME.primary }}
               />
@@ -825,7 +906,10 @@ const CatalogueBuilderScreen = () => {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Edit Text</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <TouchableOpacity onPress={() => {
+                haptics.modalClose();
+                setModalVisible(false);
+              }}>
                 <Icon name="x" size={24} color={THEME.textDark} />
               </TouchableOpacity>
             </View>
@@ -862,21 +946,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: 12,
+    width: isTablet() ? 600 : '100%',
+    alignSelf: 'center',
   },
   heroText: {
-    fontSize: 32,
-    fontWeight: '400',
+    ...TEXT_STYLES.displayLarge,
+    fontWeight: TYPOGRAPHY.fontWeight.regular,
     color: THEME.textDark,
-    letterSpacing: -0.5,
   },
   scrollContent: { paddingBottom: 40 },
-  formContainer: { paddingHorizontal: 20 },
+  formContainer: {
+    paddingHorizontal: 20,
+    width: isTablet() ? 600 : '100%',
+    alignSelf: 'center',
+  },
   watchNavigator: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 12,
-    marginHorizontal: 20,
+    marginHorizontal: isTablet() ? undefined : 20,
+    width: isTablet() ? 560 : undefined,
+    alignSelf: isTablet() ? 'center' : 'stretch',
     marginBottom: 16,
     backgroundColor: THEME.surface,
     borderRadius: 24,
@@ -897,21 +988,21 @@ const styles = StyleSheet.create({
   navArrowDisabled: { opacity: 0.3 },
   watchIndicatorContainer: { flex: 1, alignItems: 'center' },
   watchIndicatorText: {
-    fontSize: 12,
-    fontWeight: '600',
+    ...TEXT_STYLES.bodySmall,
     color: THEME.textMuted,
   },
   watchIndicatorName: {
-    fontSize: 14,
-    fontWeight: '600',
+    ...TEXT_STYLES.bodyMedium,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
     color: THEME.textDark,
+    marginTop: 2,
   },
   label: {
-    fontSize: 12,
+    ...TEXT_STYLES.bodySmall,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
     color: THEME.textMuted,
-    fontWeight: '600',
     letterSpacing: 1,
-    marginBottom: 10,
+    marginBottom: 8,
     marginTop: 20,
   },
   input: {
@@ -919,7 +1010,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 16,
-    fontSize: 15,
+    ...TEXT_STYLES.bodyLarge,
     color: THEME.textDark,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -927,80 +1018,69 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 1,
   },
-  row: { flexDirection: 'row', gap: 12 },
+  row: { flexDirection: 'row', gap: 12, marginBottom: 12 },
   halfCol: { flex: 1 },
   cardContainer: {
-    backgroundColor: THEME.surface,
-    borderRadius: 32,
-    padding: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.02,
-    shadowRadius: 4,
-    elevation: 1,
+    width: '100%',
+    marginBottom: 24,
   },
   cardContainerBox: {
     backgroundColor: THEME.surface,
-    borderRadius: 32,
-    paddingVertical: 22,
-    paddingHorizontal: 16,
+    borderRadius: 28,
+    padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.02,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  templateSection: { marginBottom: 12 },
+  templateSection: { marginBottom: 20 },
   templateScroll: { gap: 12 },
   templateCard: {
-    width: 120,
-    backgroundColor: THEME.surface,
-    borderRadius: 24,
+    width: 100,
+    height: 140,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 2,
     borderColor: 'transparent',
     position: 'relative',
-    alignItems: 'center',
-    marginTop: 10,
   },
   templateCardActive: { borderColor: THEME.primary },
   templatePreview: {
     width: '100%',
-    height: 60,
-    borderRadius: 18,
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
   },
   templatePreviewText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 3,
-    textAlign: 'center',
-    textTransform: 'uppercase',
-    paddingLeft: 3,
+    ...TEXT_STYLES.bodySmall,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    letterSpacing: 1,
   },
   activeTickBadge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#2ECC71',
+    top: 8,
+    right: 8,
+    backgroundColor: THEME.primary,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-    zIndex: 100,
+    zIndex: 10,
   },
   imageStage: {
     width: '100%',
-    aspectRatio: 0.9,
-    backgroundColor: THEME.background,
-    borderRadius: 28,
+    height: 280,
+    backgroundColor: THEME.imageBg,
+    borderRadius: 32,
     overflow: 'hidden',
     position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
   },
   watchImage: {
     position: 'absolute',
@@ -1038,8 +1118,8 @@ const styles = StyleSheet.create({
   changePhotoIcon: { marginRight: 6 },
   changePhotoText: {
     color: THEME.textDark,
-    fontSize: 14,
-    fontWeight: '600',
+    ...TEXT_STYLES.bodyMedium,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
   },
   placeholderContainer: {
     flex: 1,
@@ -1048,18 +1128,17 @@ const styles = StyleSheet.create({
   },
   placeholderIcon: { marginBottom: 8 },
   placeholderText: {
-    fontSize: 15,
+    ...TEXT_STYLES.bodyLarge,
     color: THEME.textMuted,
-    fontWeight: '500',
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
   },
 
-  // Canvas section
   canvasSection: { marginTop: 24 },
   canvasHint: {
-    fontSize: 13,
+    ...TEXT_STYLES.bodySmall,
     color: THEME.textMuted,
     marginBottom: 16,
-    fontWeight: '400',
+    fontWeight: TYPOGRAPHY.fontWeight.regular,
   },
   canvasContainer: {
     alignItems: 'center',
@@ -1067,11 +1146,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
 
-  // Color customization
   colorSection: { marginTop: 24 },
   colorLabel: {
-    fontSize: 12,
-    fontWeight: '600',
+    ...TEXT_STYLES.bodySmall,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
     color: THEME.textMuted,
     marginBottom: 10,
   },
@@ -1089,14 +1167,28 @@ const styles = StyleSheet.create({
     borderColor: THEME.accentColor,
   },
 
-  // Export config
   exportSection: { marginTop: 24 },
   settingsHeader: {
-    fontSize: 12,
-    fontWeight: '600',
+    ...TEXT_STYLES.bodySmall,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
     color: THEME.textMuted,
     letterSpacing: 1,
     marginBottom: 12,
+  },
+  customLabel: {
+    ...TEXT_STYLES.bodySmall,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: THEME.textMuted,
+    marginTop: 16,
+  },
+  customInput: {
+    backgroundColor: THEME.background,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    ...TEXT_STYLES.bodyMedium,
+    color: THEME.textDark,
+    marginTop: 8,
   },
   switchRow: {
     flexDirection: 'row',
@@ -1107,7 +1199,7 @@ const styles = StyleSheet.create({
     borderColor: THEME.background,
   },
   switchRowLast: { borderBottomWidth: 0 },
-  settingText: { fontSize: 15, fontWeight: '500', color: THEME.textDark },
+  settingText: { ...TEXT_STYLES.bodyLarge, fontWeight: TYPOGRAPHY.fontWeight.medium, color: THEME.textDark },
   actionsWrapper: { marginTop: 40, marginBottom: 20, gap: 12 },
   btnPrimary: {
     backgroundColor: THEME.accentColor,
@@ -1122,7 +1214,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 4,
   },
-  btnTextPrimary: { color: THEME.textDark, fontWeight: '600', fontSize: 16 },
+  btnTextPrimary: { color: THEME.textDark, fontWeight: TYPOGRAPHY.fontWeight.semibold, ...TEXT_STYLES.bodyLarge },
   btnSecondary: {
     backgroundColor: THEME.primary,
     flexDirection: 'row',
@@ -1131,11 +1223,10 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     borderRadius: 30,
   },
-  btnTextSecondary: { fontWeight: '600', fontSize: 16, color: THEME.surface },
+  btnTextSecondary: { fontWeight: TYPOGRAPHY.fontWeight.semibold, ...TEXT_STYLES.bodyLarge, color: THEME.surface },
   btnIcon: { marginRight: 8 },
   bottomSpacer: { height: 120 },
 
-  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
@@ -1155,12 +1246,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: THEME.textDark },
+  modalTitle: { ...TEXT_STYLES.headingMedium, fontWeight: TYPOGRAPHY.fontWeight.bold, color: THEME.textDark },
   modalInput: {
     backgroundColor: THEME.background,
     borderRadius: 12,
     padding: 16,
-    fontSize: 16,
+    ...TEXT_STYLES.bodyLarge,
     color: THEME.textDark,
     minHeight: 60,
     marginBottom: 24,
@@ -1171,7 +1262,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
   },
-  modalSaveBtnText: { color: THEME.surface, fontSize: 16, fontWeight: '700' },
+  modalSaveBtnText: { color: THEME.surface, ...TEXT_STYLES.bodyLarge, fontWeight: TYPOGRAPHY.fontWeight.bold },
 
   selectorRow: {
     flexDirection: 'row',
@@ -1193,9 +1284,9 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.primary,
   },
   selectorButtonText: {
-    fontSize: 13,
+    ...TEXT_STYLES.bodySmall,
     color: THEME.textDark,
-    fontWeight: '600',
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
   },
   selectorButtonTextActive: {
     color: THEME.surface,
@@ -1208,9 +1299,9 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   errorText: {
-    fontSize: 16,
+    ...TEXT_STYLES.bodyLarge,
     color: THEME.textMuted,
-    fontWeight: '500',
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
     marginTop: 16,
     marginBottom: 24,
   },
@@ -1220,7 +1311,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 26,
   },
-  errorButtonText: { color: THEME.surface, fontSize: 15, fontWeight: '600' },
+  errorButtonText: { color: THEME.surface, ...TEXT_STYLES.bodyLarge, fontWeight: TYPOGRAPHY.fontWeight.semibold },
 });
 
 export default CatalogueBuilderScreen;

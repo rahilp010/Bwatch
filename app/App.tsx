@@ -29,6 +29,7 @@ import WatchDetailsScreen from './screens/WatchDetailsScreen';
 import CatalogueBuilderScreen from './screens/CatalogueBuilderScreen';
 // @ts-ignore
 import PDFPreviewScreen from './screens/PDFPreviewScreen';
+import { haptics } from './utils/haptics';
 import Template from './screens/Template';
 
 const Stack = createStackNavigator();
@@ -88,8 +89,8 @@ function AppNavigator(): React.JSX.Element {
   ) {
     activeTab = 'catalogue';
   }
-
   const handleTabPress = (tabName: string) => {
+    haptics.tabSwitch();
     if (tabName === 'home') {
       resetTo('Dashboard');
     } else if (tabName === 'template') {
@@ -99,9 +100,7 @@ function AppNavigator(): React.JSX.Element {
     } else if (tabName === 'catalogue') {
       resetTo('CatalogueBuilder');
     }
-  };
-
-  return (
+  };  return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={THEME.background} />
 

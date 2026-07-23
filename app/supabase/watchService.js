@@ -159,6 +159,46 @@ export const toggleWatchFavorite = async (id, currentStatus) => {
   }
 };
 
+// Get optimized image URL for display (smaller size, faster loading)
+export const getOptimizedImageUrl = (imageUrl, width = 400, quality = 80) => {
+  if (!imageUrl || !imageUrl.includes('supabase.co')) {
+    return imageUrl;
+  }
+  
+  try {
+    const url = new URL(imageUrl);
+    // Add Supabase image transformation parameters
+    url.searchParams.set('width', width.toString());
+    url.searchParams.set('quality', quality.toString());
+    url.searchParams.set('resize', 'contain');
+    return url.toString();
+  } catch (error) {
+    console.error('Error optimizing image URL:', error);
+    return imageUrl;
+  }
+};
+
+// Get high quality image URL for PDF generation
+export const getHighQualityImageUrl = (imageUrl) => {
+  if (!imageUrl || !imageUrl.includes('supabase.co')) {
+    return imageUrl;
+  }
+  
+  try {
+    const url = new URL(imageUrl);
+    // Remove any existing transformations
+    url.search = '';
+    // Add high quality parameters
+    url.searchParams.set('width', '1200');
+    url.searchParams.set('quality', '95');
+    url.searchParams.set('resize', 'contain');
+    return url.toString();
+  } catch (error) {
+    console.error('Error getting high quality image URL:', error);
+    return imageUrl;
+  }
+};
+
 // Helper to decode base64 to Uint8Array for React Native binary upload support
 const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 const lookup = new Uint8Array(256);

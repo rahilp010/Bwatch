@@ -16,6 +16,12 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useApp } from '../context/AppContext';
+import { getOptimizedImageUrl } from '../supabase/watchService';
+import TYPOGRAPHY, { TEXT_STYLES } from '../theme/typography';
+import { isTablet, getGridConfig, getSpacing, getCardWidth } from '../theme/responsive';
+import { haptics } from '../utils/haptics';
+import { getVersionString } from '../constants/app';
+import Skeleton from '../components/Skeleton';
 
 const { width } = Dimensions.get('window');
 
@@ -72,10 +78,13 @@ const Dashboard = () => {
   const [selectedWatches, setSelectedWatches] = useState([]);
   const [sortBy, setSortBy] = useState('none');
   const [showPdfModeModal, setShowPdfModeModal] = useState(false);
+  const [imageLoading, setImageLoading] = useState({});
 
   const animatedValues = useRef([]);
   const slideAnim = useRef(new Animated.Value(width)).current;
   const modalAnim = useRef(new Animated.Value(0)).current;
+
+
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -134,6 +143,7 @@ const Dashboard = () => {
 
   const toggleFilter = open => {
     setIsFilterOpen(open);
+    haptics.modalOpen();
     Animated.timing(slideAnim, {
       toValue: open ? 0 : width,
       duration: 300,
@@ -144,9 +154,11 @@ const Dashboard = () => {
   const toggleSelectionMode = () => {
     setIsSelectionMode(!isSelectionMode);
     setSelectedWatches([]);
+    haptics.buttonPress();
   };
 
   const toggleWatchSelection = watchId => {
+    haptics.cardSelect();
     setSelectedWatches(prev => {
       if (prev.includes(watchId)) {
         return prev.filter(id => id !== watchId);
@@ -214,10 +226,14 @@ const Dashboard = () => {
           activeOpacity={0.9}
           onPress={() => {
             if (isSelectionMode) toggleWatchSelection(item.id);
-            else navigate('WatchDetails', { watchId: item.id });
+            else {
+              haptics.buttonPress();
+              navigate('WatchDetails', { watchId: item.id });
+            }
           }}
           onLongPress={() => {
             if (!isSelectionMode) {
+              haptics.cardSelect();
               setIsSelectionMode(true);
               setSelectedWatches([item.id]);
             }
@@ -231,10 +247,19 @@ const Dashboard = () => {
             ]}
           >
             <Image
-              source={{ uri: item.image }}
+              source={{ uri: getOptimizedImageUrl(item.image, 400, 80) }}
               style={styles.cardImage}
               resizeMode="cover"
+              onLoadStart={() => setImageLoading(prev => ({ ...prev, [item.id]: true }))}
+              onLoadEnd={() => setImageLoading(prev => ({ ...prev, [item.id]: false }))}
             />
+            {imageLoading[item.id] !== false && (
+              <Skeleton
+                width="100%"
+                height="100%"
+                style={StyleSheet.absoluteFillObject}
+              />
+            )}
             <View style={styles.imageOverlay} />
             <View style={styles.cardTopSection}>
               {isSelectionMode ? (
@@ -435,6 +460,10 @@ const Dashboard = () => {
             </View>
           )}
         </View>
+
+        <View style={styles.dashboardFooter}>
+          <Text style={styles.dashboardVersionText}>BWatch v{getVersionString()}</Text>
+        </View>
       </ScrollView>
 
       {isFilterOpen && (
@@ -467,6 +496,7 @@ const Dashboard = () => {
           ]}
           onPress={() => {
             setSortBy(sortBy === 'price_asc' ? 'none' : 'price_asc');
+            haptics.buttonPress();
             toggleFilter(false);
           }}
         >
@@ -490,6 +520,7 @@ const Dashboard = () => {
           ]}
           onPress={() => {
             setSortBy(sortBy === 'price_desc' ? 'none' : 'price_desc');
+            haptics.buttonPress();
             toggleFilter(false);
           }}
         >
@@ -517,6 +548,7 @@ const Dashboard = () => {
           ]}
           onPress={() => {
             setSortBy(sortBy === 'brand_asc' ? 'none' : 'brand_asc');
+            haptics.buttonPress();
             toggleFilter(false);
           }}
         >
@@ -532,6 +564,10 @@ const Dashboard = () => {
             <Icon name="check" size={18} color={THEME.textLight} />
           )}
         </TouchableOpacity>
+
+        <View style={styles.panelFooter}>
+          <Text style={styles.panelVersionText}>Version {getVersionString()}</Text>
+        </View>
       </Animated.View>
 
       <Modal
@@ -664,10 +700,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   mainHeaderText: {
-    fontSize: 40,
-    fontWeight: '400',
+    ...TEXT_STYLES.displayLarge,
     color: THEME.textDark,
-    letterSpacing: 0,
   },
   searchRow: {
     flexDirection: 'row',
@@ -689,7 +723,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
+    ...TEXT_STYLES.bodyLarge,
     color: THEME.textDark,
   },
   filterButton: {
@@ -721,11 +755,11 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.inactivePill,
   },
   categoryPillText: {
-    fontSize: 15,
-    fontWeight: '500',
+    ...TEXT_STYLES.bodyMedium,
     color: THEME.textDark,
   },
   categoryPillTextActive: {
+    ...TEXT_STYLES.bodyMedium,
     color: THEME.textDark,
     fontWeight: '600',
   },
@@ -736,11 +770,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   listContainer: {
-    flexDirection: 'column',
-    gap: 24,
+    flexDirection: isTablet() ? 'row' : 'column',
+    flexWrap: isTablet() ? 'wrap' : 'nowrap',
+    gap: isTablet() ? getSpacing('lg') : 24,
   },
   cardContainer: {
-    width: '100%',
+    width: isTablet() ? getCardWidth(getGridConfig().columns) : '100%',
   },
   cardTouchable: {
     width: '100%',
@@ -751,7 +786,7 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.primary,
     borderRadius: 32,
     overflow: 'hidden',
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: 'transparent',
     position: 'relative',
   },
@@ -772,8 +807,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: '40%',
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    height: '27%',
+    backgroundColor: 'rgba(0,0,0,0.15)',
     zIndex: 2,
   },
   cardTopSection: {
@@ -801,7 +836,7 @@ const styles = StyleSheet.create({
   },
   priceText: {
     color: THEME.textDark,
-    fontSize: 16,
+    ...TEXT_STYLES.bodyLarge,
     fontWeight: '700',
   },
   selectionCheck: {
@@ -836,16 +871,16 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     color: THEME.textLight,
-    fontSize: 24,
-    fontWeight: '500',
+    ...TEXT_STYLES.headingLarge,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 6,
   },
   cardBrand: {
     color: THEME.textLight,
-    fontSize: 14,
-    fontWeight: '400',
+    ...TEXT_STYLES.bodyMedium,
+    fontWeight: TYPOGRAPHY.fontWeight.regular,
     opacity: 0.9,
     marginTop: 4,
     textShadowColor: 'rgba(0,0,0,0.6)',
@@ -879,7 +914,7 @@ const styles = StyleSheet.create({
   emptyText: {
     marginTop: 16,
     color: THEME.textMuted,
-    fontSize: 16,
+    ...TEXT_STYLES.bodyLarge,
   },
   overlay: {
     position: 'absolute',
@@ -908,8 +943,7 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   panelTitle: {
-    fontSize: 24,
-    fontWeight: '800',
+    ...TEXT_STYLES.displaySmall,
     color: THEME.textDark,
   },
   closeBtn: {
@@ -917,10 +951,8 @@ const styles = StyleSheet.create({
     marginRight: -8,
   },
   filterSectionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
+    ...TEXT_STYLES.captionLarge,
     color: THEME.textMuted,
-    letterSpacing: 1.5,
     marginBottom: 16,
   },
   filterOption: {
@@ -937,8 +969,8 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.primary,
   },
   filterOptionText: {
-    fontSize: 16,
-    fontWeight: '600',
+    ...TEXT_STYLES.bodyLarge,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
     color: THEME.textDark,
   },
   filterOptionTextActive: {
@@ -972,22 +1004,21 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalTitle: {
-    fontSize: 22,
-    fontWeight: '800',
+    ...TEXT_STYLES.headingLarge,
+    fontWeight: TYPOGRAPHY.fontWeight.extrabold,
     color: THEME.textDark,
     marginBottom: 4,
   },
   modalSubtitle: {
-    fontSize: 14,
-    fontWeight: '500',
+    ...TEXT_STYLES.bodyMedium,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
     color: THEME.textMuted,
   },
   modalDescription: {
-    fontSize: 14,
+    ...TEXT_STYLES.bodyMedium,
     color: THEME.textMuted,
     textAlign: 'center',
     marginBottom: 24,
-    lineHeight: 20,
   },
   modalOption: {
     flexDirection: 'row',
@@ -1010,13 +1041,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalOptionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    ...TEXT_STYLES.bodyLarge,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
     color: THEME.textDark,
     marginBottom: 2,
   },
   modalOptionDesc: {
-    fontSize: 13,
+    ...TEXT_STYLES.bodySmall,
     color: THEME.textMuted,
   },
   modalCancelButton: {
@@ -1026,8 +1057,30 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   modalCancelText: {
-    fontSize: 16,
-    fontWeight: '600',
+    ...TEXT_STYLES.bodyLarge,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: THEME.textMuted,
+  },
+  dashboardFooter: {
+    paddingVertical: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dashboardVersionText: {
+    ...TEXT_STYLES.bodySmall,
+    color: THEME.textMuted,
+    opacity: 0.6,
+  },
+  panelFooter: {
+    position: 'absolute',
+    bottom: 30,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  panelVersionText: {
+    ...TEXT_STYLES.captionLarge,
     color: THEME.textMuted,
   },
 });

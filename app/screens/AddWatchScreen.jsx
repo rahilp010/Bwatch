@@ -9,9 +9,7 @@ import {
   Animated,
   SafeAreaView,
   StatusBar,
-  Dimensions,
   Image,
-  Alert,
   PermissionsAndroid,
   Platform,
 } from 'react-native';
@@ -22,8 +20,9 @@ import Toast from 'react-native-toast-message';
 import { useApp } from '../context/AppContext';
 import { uploadWatchImage } from '../supabase/watchService';
 import { isConfigured } from '../supabase/client';
-
-const { width } = Dimensions.get('window');
+import { haptics } from '../utils/haptics';
+import TYPOGRAPHY, { TEXT_STYLES } from '../theme/typography';
+import { isTablet } from '../theme/responsive';
 
 // --- THEME MATCHING NEW DESIGN SYSTEM ---
 const THEME = {
@@ -219,6 +218,7 @@ const AddWatchScreen = () => {
 
   const handleSave = async () => {
     if (!brand.trim() || !name.trim()) {
+      haptics.error();
       Toast.show({
         type: 'error',
         text1: 'Error',
@@ -239,6 +239,7 @@ const AddWatchScreen = () => {
     };
     if (isEditMode) {
       await updateWatch(editWatchId, watchData);
+      haptics.save();
       Toast.show({
         type: 'success',
         text1: 'Success',
@@ -246,6 +247,7 @@ const AddWatchScreen = () => {
       });
     } else {
       await addWatch(watchData);
+      haptics.save();
       Toast.show({
         type: 'success',
         text1: 'Success',
@@ -262,7 +264,10 @@ const AddWatchScreen = () => {
         {isEditMode && (
           <TouchableOpacity
             style={[styles.iconButton, { marginRight: 16 }]}
-            onPress={() => goBack()}
+            onPress={() => {
+              haptics.buttonPress();
+              goBack();
+            }}
           >
             <Icon name="arrow-left" size={20} color={THEME.textDark} />
           </TouchableOpacity>
@@ -315,7 +320,10 @@ const AddWatchScreen = () => {
                     <TouchableOpacity
                       style={styles.uploadButtonDark}
                       activeOpacity={0.8}
-                      onPress={() => setShowGallery(!showGallery)}
+                      onPress={() => {
+                        haptics.buttonPress();
+                        setShowGallery(!showGallery);
+                      }}
                     >
                       <Icon
                         name="image"
@@ -328,7 +336,10 @@ const AddWatchScreen = () => {
                     <TouchableOpacity
                       style={styles.uploadButtonLight}
                       activeOpacity={0.8}
-                      onPress={runCameraScan}
+                      onPress={() => {
+                        haptics.buttonPress();
+                        runCameraScan();
+                      }}
                     >
                       <MaterialIcon
                         name="camera-iris"
@@ -360,7 +371,10 @@ const AddWatchScreen = () => {
                         justifyContent: 'center',
                       },
                     ]}
-                    onPress={handleBrowseDeviceLibrary}
+                    onPress={() => {
+                      haptics.buttonPress();
+                      handleBrowseDeviceLibrary();
+                    }}
                   >
                     <Icon name="folder" size={18} color={THEME.surface} />
                   </TouchableOpacity>
@@ -371,7 +385,8 @@ const AddWatchScreen = () => {
                         styles.galleryThumbWrapper,
                         imageUrl === img && styles.galleryThumbWrapperActive,
                       ]}
-                      onPress={() => {
+                       onPress={() => {
+                        haptics.cardSelect();
                         setImageUrl(img);
                         setShowGallery(false);
                       }}
@@ -395,9 +410,12 @@ const AddWatchScreen = () => {
                     style={styles.urlApplyBtn}
                     onPress={() => {
                       if (customUrlInput.trim()) {
+                        haptics.save();
                         setImageUrl(customUrlInput);
                         setCustomUrlInput('');
                         setShowGallery(false);
+                      } else {
+                        haptics.error();
                       }
                     }}
                   >
@@ -463,7 +481,10 @@ const AddWatchScreen = () => {
                     styles.segmentButton,
                     gender === item && styles.segmentButtonActive,
                   ]}
-                  onPress={() => setGender(item)}
+                   onPress={() => {
+                    haptics.buttonPress();
+                    setGender(item);
+                  }}
                 >
                   <Text
                     style={[
@@ -488,7 +509,10 @@ const AddWatchScreen = () => {
                     styles.chipButton,
                     strap === opt && styles.chipButtonActive,
                   ]}
-                  onPress={() => setStrap(opt)}
+                   onPress={() => {
+                    haptics.buttonPress();
+                    setStrap(opt);
+                  }}
                 >
                   <Text
                     style={[
@@ -513,7 +537,10 @@ const AddWatchScreen = () => {
                     styles.chipButton,
                     type === opt && styles.chipButtonActive,
                   ]}
-                  onPress={() => setType(opt)}
+                   onPress={() => {
+                    haptics.buttonPress();
+                    setType(opt);
+                  }}
                 >
                   <Text
                     style={[
@@ -577,10 +604,9 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   heroText: {
-    fontSize: 32,
-    fontWeight: '400',
+    ...TEXT_STYLES.displayLarge,
+    fontWeight: TYPOGRAPHY.fontWeight.regular,
     color: THEME.textDark,
-    letterSpacing: -0.5,
   },
   iconButton: {
     width: 52,
@@ -596,7 +622,11 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   scrollContent: { paddingBottom: 40 },
-  formContainer: { paddingHorizontal: 20 },
+  formContainer: {
+    paddingHorizontal: 20,
+    width: isTablet() ? 600 : '100%',
+    alignSelf: 'center',
+  },
   uploadSection: { marginBottom: 24 },
   dashedBox: {
     borderRadius: 32,
@@ -632,8 +662,8 @@ const styles = StyleSheet.create({
   },
   uploadButtonTextDark: {
     color: THEME.surface,
-    fontSize: 14,
-    fontWeight: '600',
+    ...TEXT_STYLES.bodyMedium,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
   },
   uploadButtonLight: {
     flex: 1,
@@ -646,8 +676,8 @@ const styles = StyleSheet.create({
   },
   uploadButtonTextLight: {
     color: THEME.primary,
-    fontSize: 14,
-    fontWeight: '600',
+    ...TEXT_STYLES.bodyMedium,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
   },
   btnIcon: { marginRight: 6 },
   scannerWrapper: {
@@ -666,9 +696,9 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.background,
   },
   scanningText: {
-    fontSize: 13,
+    ...TEXT_STYLES.bodyMedium,
     color: THEME.primary,
-    fontWeight: '600',
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
     marginTop: 10,
   },
   galleryChooser: {
@@ -683,8 +713,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   galleryHeading: {
-    fontSize: 11,
-    fontWeight: '700',
+    ...TEXT_STYLES.captionLarge,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
     color: THEME.textMuted,
     letterSpacing: 1,
     marginBottom: 12,
@@ -708,7 +738,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    fontSize: 14,
+    ...TEXT_STYLES.bodyMedium,
     color: THEME.textDark,
   },
   urlApplyBtn: {
@@ -719,9 +749,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   label: {
-    fontSize: 12,
+    ...TEXT_STYLES.bodySmall,
     color: THEME.textMuted,
-    fontWeight: '600',
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
     letterSpacing: 1,
     marginBottom: 8,
     marginTop: 20,
@@ -731,7 +761,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 16,
-    fontSize: 15,
+    ...TEXT_STYLES.bodyLarge,
     color: THEME.textDark,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -757,7 +787,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   segmentButtonActive: { backgroundColor: THEME.primary },
-  segmentText: { fontSize: 14, fontWeight: '600', color: THEME.textMuted },
+  segmentText: {
+    ...TEXT_STYLES.bodyMedium,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+    color: THEME.textMuted,
+  },
   segmentTextActive: { color: THEME.surface },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   chipButton: {
@@ -772,8 +806,12 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   chipButtonActive: { backgroundColor: THEME.primary },
-  chipText: { fontSize: 14, fontWeight: '500', color: THEME.textMuted },
-  chipTextActive: { color: THEME.surface, fontWeight: '600' },
+  chipText: {
+    ...TEXT_STYLES.bodyMedium,
+    fontWeight: TYPOGRAPHY.fontWeight.medium,
+    color: THEME.textMuted,
+  },
+  chipTextActive: { color: THEME.surface, fontWeight: TYPOGRAPHY.fontWeight.semibold },
   textArea: { height: 120, paddingTop: 16 },
   actionContainer: { marginTop: 40, marginBottom: 20 },
   saveButton: {
@@ -789,7 +827,11 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 4,
   },
-  saveButtonText: { color: THEME.textDark, fontSize: 16, fontWeight: '600' },
+  saveButtonText: {
+    color: THEME.textDark,
+    ...TEXT_STYLES.bodyLarge,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
+  },
 });
 
 export default AddWatchScreen;

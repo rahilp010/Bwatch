@@ -14,9 +14,18 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import { launchImageLibrary } from 'react-native-image-picker';
 import TemplateCoverCanvas from '../components/TemplateCoverCanvas';
+import { haptics } from '../utils/haptics';
+import TYPOGRAPHY, { TEXT_STYLES } from '../theme/typography';
+import { isTablet } from '../theme/responsive';
 
 const { width } = Dimensions.get('window');
-const CANVAS_WIDTH = width - 40;
+const getCanvasWidth = () => {
+  if (isTablet()) {
+    return 400;
+  }
+  return width - 40;
+};
+const CANVAS_WIDTH = getCanvasWidth();
 const CANVAS_HEIGHT = CANVAS_WIDTH * 1.414;
 
 const THEME = {
@@ -49,6 +58,7 @@ const Template = () => {
   const [tempText, setTempText] = useState('');
 
   const handleImagePick = () => {
+    haptics.buttonPress();
     launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, response => {
       if (response.didCancel || response.errorCode) return;
       if (response.assets && response.assets.length > 0) {
@@ -58,17 +68,17 @@ const Template = () => {
   };
 
   const openTextEditor = key => {
+    haptics.modalOpen();
     setActiveTextKey(key);
     setTempText(content[key]);
     setModalVisible(true);
   };
 
   const saveTextEdit = () => {
+    haptics.save();
     setContent(prev => ({ ...prev, [activeTextKey]: tempText }));
     setModalVisible(false);
   };
-
-
 
   return (
     <SafeAreaView style={styles.container}>
@@ -86,7 +96,10 @@ const Template = () => {
         </View>
         <TouchableOpacity
           style={[styles.toggleBtn, editMode ? styles.toggleBtnActive : null]}
-          onPress={() => setEditMode(!editMode)}
+          onPress={() => {
+            haptics.buttonPress();
+            setEditMode(!editMode);
+          }}
         >
           <Icon
             name={editMode ? 'edit-2' : 'eye'}
@@ -131,17 +144,22 @@ const Template = () => {
               showsHorizontalScrollIndicator={false}
               style={styles.colorRow}
             >
-              {['#222426', '#0A1118', '#4A3C2A', '#1C1C1E', '#F5F5F5'].map(c => (
-                <TouchableOpacity
-                  key={c}
-                  style={[
-                    styles.colorCircle,
-                    { backgroundColor: c },
-                    bgColor === c && styles.colorCircleActive,
-                  ]}
-                  onPress={() => setBgColor(c)}
-                />
-              ))}
+              {['#222426', '#0A1118', '#4A3C2A', '#1C1C1E', '#F5F5F5'].map(
+                c => (
+                  <TouchableOpacity
+                    key={c}
+                    style={[
+                      styles.colorCircle,
+                      { backgroundColor: c },
+                      bgColor === c && styles.colorCircleActive,
+                    ]}
+                    onPress={() => {
+                      haptics.buttonPress();
+                      setBgColor(c);
+                    }}
+                  />
+                ),
+              )}
             </ScrollView>
 
             <Text style={styles.colorLabel}>Accent Color</Text>
@@ -150,17 +168,19 @@ const Template = () => {
               showsHorizontalScrollIndicator={false}
               style={styles.colorRow}
             >
-              {['#FFFFFF', '#D4AF37', '#F0FE67', '#B76E79', '#1C1C1E'].map(c => (
-                <TouchableOpacity
-                  key={c}
-                  style={[
-                    styles.colorCircle,
-                    { backgroundColor: c },
-                    accentColor === c && styles.colorCircleActive,
-                  ]}
-                  onPress={() => setAccentColor(c)}
-                />
-              ))}
+              {['#FFFFFF', '#D4AF37', '#F0FE67', '#B76E79', '#1C1C1E'].map(
+                c => (
+                  <TouchableOpacity
+                    key={c}
+                    style={[
+                      styles.colorCircle,
+                      { backgroundColor: c },
+                      accentColor === c && styles.colorCircleActive,
+                    ]}
+                    onPress={() => setAccentColor(c)}
+                  />
+                ),
+              )}
             </ScrollView>
 
             <TouchableOpacity style={styles.exportBtn}>
@@ -221,7 +241,11 @@ const styles = StyleSheet.create({
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center' },
   headerIcon: { marginRight: 8 },
-  headerTitle: { fontSize: 20, fontWeight: '700', color: THEME.textDark },
+  headerTitle: {
+    ...TEXT_STYLES.headingLarge,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    color: THEME.textDark,
+  },
   toggleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -238,8 +262,8 @@ const styles = StyleSheet.create({
   },
   toggleBtnText: {
     marginLeft: 6,
-    fontSize: 13,
-    fontWeight: '600',
+    ...TEXT_STYLES.bodySmall,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
     color: THEME.textDark,
   },
   toggleBtnTextActive: { color: THEME.surface },
@@ -257,14 +281,14 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   panelTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    ...TEXT_STYLES.headingSmall,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
     color: THEME.textDark,
     marginBottom: 20,
   },
   colorLabel: {
-    fontSize: 12,
-    fontWeight: '600',
+    ...TEXT_STYLES.bodySmall,
+    fontWeight: TYPOGRAPHY.fontWeight.semibold,
     color: THEME.textMuted,
     marginBottom: 10,
   },
@@ -291,7 +315,11 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   exportIcon: { marginRight: 8 },
-  exportBtnText: { color: THEME.textDark, fontSize: 15, fontWeight: '700' },
+  exportBtnText: {
+    color: THEME.textDark,
+    ...TEXT_STYLES.bodyLarge,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+  },
   bottomSpacer: { height: 100 },
   modalOverlay: {
     flex: 1,
@@ -312,12 +340,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: THEME.textDark },
+  modalTitle: {
+    ...TEXT_STYLES.headingMedium,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+    color: THEME.textDark,
+  },
   modalInput: {
     backgroundColor: THEME.background,
     borderRadius: 12,
     padding: 16,
-    fontSize: 16,
+    ...TEXT_STYLES.bodyLarge,
     color: THEME.textDark,
     minHeight: 60,
     marginBottom: 24,
@@ -328,7 +360,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
   },
-  modalSaveBtnText: { color: THEME.surface, fontSize: 16, fontWeight: '700' },
+  modalSaveBtnText: {
+    color: THEME.surface,
+    ...TEXT_STYLES.bodyLarge,
+    fontWeight: TYPOGRAPHY.fontWeight.bold,
+  },
 });
 
 export default Template;
